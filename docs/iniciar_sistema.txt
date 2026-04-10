@@ -1,0 +1,55 @@
+1. PRÉ-REQUISITOS
+
+- .NET 10 SDK instalado (verifique com `dotnet --version`).
+- Node.js + npm instalados (recomenda-se Node 18+).
+- MySQL Server instalado e em execução.
+- Editor/terminal de sua preferência.
+
+2. DEPENDÊNCIAS IMPORTANTES DO PROJETO
+
+- O backend usa .NET 10 e está em `backend\Learly.API\Learly.API.csproj`.
+- O projeto backend possui auditoria integrada com Audit.NET em `backend\Learly.Infrastructure\Learly.Infrastructure.csproj`.
+
+3. INSTALAR DEPENDÊNCIAS PELO TERMINAL
+
+No terminal, execute:
+
+- Para o backend:
+  `cd backend\Learly.API`
+  `dotnet restore`
+
+- Para o frontend:
+  `cd frontend`
+  `npm install`
+
+4. CONFIGURAR O BANCO DE DADOS MySQL
+
+- A conexão padrão está em `backend\Learly.API\appsettings.json`:
+  `Server=localhost;Database=learly_db;User=root;Password=root;`
+- Se seu MySQL usar outro usuário, senha ou host, ajuste esse arquivo antes de iniciar.
+
+
+4. RODAR O BACKEND
+
+No terminal principal:
+
+```
+dotnet run --project "backend\Learly.API\Learly.API.csproj"
+```
+
+5. RODAR O FRONTEND
+
+No terminal separado:
+
+```
+cd frontend
+npm run dev
+```
+
+6. OBSERVAÇÕES FINAIS
+
+- Execute backend e frontend em terminais diferentes.
+- Se você estiver usando outro usuário/senha do MySQL, atualize `appsettings.json` antes de iniciar.
+- O projeto já inclui Audit.NET no backend para auditoria automática com Entity Framework.
+- Se precisar instalar dependências .NET manualmente, use `dotnet restore` na pasta principal do backend.
+- Se precisar instalar dependências de frontend, use `npm install` em `frontend` antes de `npm run dev`.

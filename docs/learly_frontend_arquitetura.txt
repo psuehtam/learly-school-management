@@ -1,0 +1,618 @@
+# LEARLY — Arquitetura de Páginas do Frontend (Next.js App Router)
+# Versão 4.0 | Baseado na ERS v4
+#
+# CONVENÇÕES:
+#   page.tsx        → página renderizável
+#   layout.tsx      → layout compartilhado por grupo de rotas
+#   loading.tsx     → skeleton/loading state
+#   _components/    → componentes exclusivos daquela página/rota
+#   (auth)/         → grupo protegido: exige JWT válido + escola ativa
+#   (super-admin)/  → grupo protegido: exige is_super_admin = true
+#   (public)/       → rotas públicas (sem autenticação)
+# ─────────────────────────────────────────────────────────────
+
+frontend/
+└── src/
+    ├── app/
+    │   │
+    │   ├── (public)/                          # Rotas públicas — sem autenticação
+    │   │   └── login/
+    │   │       ├── page.tsx
+    │   │       # FUNÇÕES:
+    │   │       # - Formulário com 3 campos: Código da escola, E-mail, Senha
+    │   │       # - Campo "mostrar/ocultar senha"
+    │   │       # - Botão Entrar (desabilitado durante loading)
+    │   │       # - Validação client-side antes de submeter
+    │   │       # - Chama POST /auth/login → recebe JWT
+    │   │       # - Armazena token (httpOnly cookie ou memory)
+    │   │       # - Redireciona para /dashboard (perfil determina tela inicial)
+    │   │       # - Exibe mensagem de erro clara sem revelar qual campo está errado
+    │   │       # - Bloqueia formulário após N tentativas (feedback visual)
+    │   │       └── _components/
+    │   │           ├── LoginForm.tsx
+    │   │           └── LoginError.tsx
+    │   │
+    │   ├── (super-admin)/                     # Área exclusiva do Super Admin
+    │   │   ├── layout.tsx
+    │   │   │   # FUNÇÕES:
+    │   │   │   # - Verifica is_super_admin = true no JWT
+    │   │   │   # - Sidebar própria com links: Dashboard, Escolas
+    │   │   │   # - Header com identificação "Super Admin"
+    │   │   │   # - Redireciona para /login se não for Super Admin
+    │   │   │
+    │   │   ├── super-admin/
+    │   │   │   ├── dashboard/
+    │   │   │   │   └── page.tsx
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Cards com totais: total de escolas, ativas, inativas
+    │   │   │   │   # - Lista das últimas escolas criadas
+    │   │   │   │   # - Botão "+ Nova Escola"
+    │   │   │   │
+    │   │   │   └── escolas/
+    │   │   │       ├── page.tsx
+    │   │   │       │   # FUNÇÕES:
+    │   │   │       │   # - Tabela de todas as escolas: nome, código, CNPJ, status
+    │   │   │       │   # - Filtro por status (Ativo/Inativo)
+    │   │   │       │   # - Botão "+ Nova Escola"
+    │   │   │       │   # - Ações por linha: Editar, Ativar/Inativar
+    │   │   │       │   # - Busca por nome ou código
+    │   │   │       │
+    │   │   │       ├── nova/
+    │   │   │       │   └── page.tsx
+    │   │   │       │   # FUNÇÕES:
+    │   │   │       │   # - Formulário: nome fantasia, razão social, CNPJ, código único
+    │   │   │       │   # - Validação de código único (sem espaços, ex: CWB01)
+    │   │   │       │   # - Seção "Admin da Escola": cria o primeiro usuário Admin
+    │   │   │       │   #   campos: nome completo, e-mail, senha inicial
+    │   │   │       │   # - Ao salvar: cria escola + perfis padrão + usuário Admin
+    │   │   │       │
+    │   │   │       └── [id]/
+    │   │   │           └── page.tsx
+    │   │   │           # FUNÇÕES:
+    │   │   │           # - Ver e editar dados da escola (nome, razão social, CNPJ)
+    │   │   │           # - Não permite alterar o código da escola após criação
+    │   │   │           # - Ativar / Inativar escola
+    │   │   │           # - Ver usuário Admin da escola
+    │   │   │           # - Histórico de criação/alteração
+    │
+    │   ├── (auth)/                            # Área autenticada — todos os perfis
+    │   │   ├── layout.tsx
+    │   │   │   # FUNÇÕES:
+    │   │   │   # - Verifica JWT válido + escola ativa
+    │   │   │   # - Renderiza Sidebar com menus filtrados por permissões do token
+    │   │   │   # - Header com nome do usuário, perfil e botão de logout
+    │   │   │   # - Injeta contexto global: { usuario, permissoes, escola }
+    │   │   │   # - Redireciona para /login se token inválido/expirado
+    │   │   │
+    │   │   ├── dashboard/
+    │   │   │   └── page.tsx
+    │   │   │   # FUNÇÕES:
+    │   │   │   # - Tela inicial pós-login para todos os perfis
+    │   │   │   # - Professor: cards de aulas do dia + atalho para agenda
+    │   │   │   # - Coordenador: resumo de turmas ativas, alunos, reposições do dia
+    │   │   │   # - Financeiro: resumo de parcelas vencidas e a vencer
+    │   │   │   # - Comercial: funil de pre-alunos por status
+    │   │   │   # - Admin: visão geral + atalhos para todas as áreas
+    │   │   │   # - Cards e métricas são carregados conforme o perfil do JWT
+    │   │   │
+    │   │   │
+    │   │   ├── professor/                     # Módulo do Professor
+    │   │   │   ├── page.tsx                   # Agenda do Professor
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Menu lateral: dias da semana (Seg-Sáb) com destaque no dia atual
+    │   │   │   │   # - Campo de busca: filtra cards por aluno, turma, livro ou horário
+    │   │   │   │   # - Área principal: aulas agrupadas em turnos (Manhã/Tarde/Noite)
+    │   │   │   │   # - Cada card exibe: nome da turma, horário, lista de alunos,
+    │   │   │   │   #   capítulo atual, progresso, data de término prevista
+    │   │   │   │   # - Cards de reposição com badge "REPOSIÇÃO" e cor diferente
+    │   │   │   │   # - Dias de feriado/recesso destacados com cor conforme calendário
+    │   │   │   │   # - Botão "Acessar Turma" em cada card
+    │   │   │   │   # - Ao clicar em reposição: abre tela de chamada da reposição
+    │   │   │   │
+    │   │   │   └── turma/
+    │   │   │       └── [id]/
+    │   │   │           ├── page.tsx           # Gerenciamento da Turma
+    │   │   │           │   # FUNÇÕES:
+    │   │   │           │   # - Cabeçalho fixo: livro, código, sala, professor, dia/horário (somente leitura)
+    │   │   │           │   # - Grid/planilha de chamada: linhas = aulas, colunas = alunos
+    │   │   │           │   # - Por aula: data, número, capítulo, campo "conteúdo dado"
+    │   │   │           │   # - Presença por aluno: botões P / F / FJ / R
+    │   │   │           │   # - Indicador de faltas acumuladas por aluno
+    │   │   │           │   # - Seção de Homework: nota por aluno por aula (0-10), média automática
+    │   │   │           │   # - Seção de Avaliações: 5 avaliações fixas (Speaking, Listening, Writing,
+    │   │   │           │   #   Class Participation, Avaliação Final) — nota + média automática
+    │   │   │           │   # - Botão "Marcar capítulo como concluído" ao final de cada aula
+    │   │   │           │   # - Se capítulo não concluído: popup "Adicionar mais uma aula?"
+    │   │   │           │   # - Lista de alunos clicável → abre histórico individual
+    │   │   │           │   # - Botão "Registrar Ocorrência" por aluno (tipo Acadêmica)
+    │   │   │           │   #
+    │   │   │           └── aluno/
+    │   │   │               └── [alunoId]/
+    │   │   │                   └── page.tsx   # Histórico Individual do Aluno
+    │   │   │                   # FUNÇÕES:
+    │   │   │                   # - Header: foto, nome, turma, data de ingresso, status
+    │   │   │                   # - Aba Presença: frequência % + histórico de P/F/FJ/R por aula
+    │   │   │                   # - Aba Notas: homework médio, avaliações por livro
+    │   │   │                   # - Aba Ocorrências: lista cronológica com data, tipo, descrição, resolução
+    │   │   │                   # - Botão "+ Nova Ocorrência" (Professor: só Acadêmica)
+    │   │   │                   # - Aba Histórico Global: dados de todas as turmas anteriores
+    │   │   │
+    │   │   │
+    │   │   ├── turmas/                        # Módulo de Turmas (Coordenador)
+    │   │   │   ├── page.tsx                   # Listagem de Turmas
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Duas abas: "Em Andamento" e "Em Espera"
+    │   │   │   │   # - Filtros: por livro, professor, dia da semana, turno, status
+    │   │   │   │   # - Cards ou tabela com: nome da turma, professor, livro, horário,
+    │   │   │   │   #   alunos matriculados, data de início, data de término prevista
+    │   │   │   │   # - Botão "+ Nova Turma"
+    │   │   │   │   # - Na aba "Em Espera": botão "Agendar Turma" por turma
+    │   │   │   │   # - Ações: Acessar, Editar campos não-estruturais, Inativar
+    │   │   │   │   # - Visão global (igual professor, mas mostrando todas as turmas)
+    │   │   │   │
+    │   │   │   ├── nova/
+    │   │   │   │   └── page.tsx               # Criação de Nova Turma
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Campos obrigatórios: Professor, Livro
+    │   │   │   │   # - Campos opcionais: Dias da semana (multi-select), Data de início,
+    │   │   │   │   #   Horário (início-fim), Sala, Observações
+    │   │   │   │   # - Seleção de alunos: busca e adição de alunos à turma
+    │   │   │   │   # - Preview: nome da turma gerado automaticamente (placeholder)
+    │   │   │   │   # - Ao salvar sem agendamento: status "Em Espera"
+    │   │   │   │   # - Ao salvar com agendamento: valida conflito de professor + sala,
+    │   │   │   │   #   gera aulas automaticamente, calcula data de término
+    │   │   │   │
+    │   │   │   └── [id]/
+    │   │   │       └── page.tsx               # Detalhes / Gerenciamento da Turma
+    │   │   │       # FUNÇÕES:
+    │   │   │       # - Cabeçalho com todos os dados da turma + status badge
+    │   │   │       # - Aba "Aulas": lista de aulas geradas com data, capitulo, status
+    │   │   │       #   (Agendada/Realizada/Cancelada), conteúdo dado
+    │   │   │       # - Aba "Alunos": lista de alunos matriculados com status,
+    │   │   │       #   frequência %, média de notas — botão "Adicionar Aluno"
+    │   │   │       # - Aba "Progresso": barra por capítulo (concluído/pendente)
+    │   │   │       # - Aba "Avaliações": grid de notas de todos os alunos
+    │   │   │       # - Botão "Inativar Turma" (com confirmação)
+    │   │   │       # - Botão "Remanejamento": iniciar fluxo de transferência de alunos
+    │   │   │       # - Edição de campos não-estruturais: professor, sala, observações
+    │   │   │
+    │   │   │
+    │   │   ├── books/                         # Módulo de Livros (Coordenador)
+    │   │   │   ├── page.tsx                   # Listagem de Livros
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Lista todos os livros com nome, status, total de capítulos, total de aulas
+    │   │   │   │   # - Filtro por status (Ativo/Inativo)
+    │   │   │   │   # - Botão "+ Novo Livro"
+    │   │   │   │   # - Ações: Editar, Inativar
+    │   │   │   │   # - Click em livro expande/abre detalhe com capítulos
+    │   │   │   │
+    │   │   │   ├── novo/
+    │   │   │   │   └── page.tsx               # Criar Novo Livro
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Campo: Nome do livro (obrigatório)
+    │   │   │   │   # - Seção de Capítulos: adicionar N capítulos dinamicamente
+    │   │   │   │   #   cada capítulo: Nome + Quantidade de aulas previstas
+    │   │   │   │   # - Contador automático do total de aulas do livro
+    │   │   │   │   # - Ordenação drag-and-drop dos capítulos
+    │   │   │   │   # - Preview da distribuição de capítulos
+    │   │   │   │
+    │   │   │   └── [id]/
+    │   │   │       └── page.tsx               # Detalhes do Livro
+    │   │   │       # FUNÇÕES:
+    │   │   │       # - Editar nome do livro
+    │   │   │       # - Gerenciar capítulos: adicionar, editar nome e qtd de aulas, reordenar
+    │   │   │       # - Total de aulas calculado automaticamente
+    │   │   │       # - Lista de turmas que usam este livro (somente leitura)
+    │   │   │       # - Botão Inativar Livro (com aviso sobre turmas ativas)
+    │   │   │
+    │   │   │
+    │   │   ├── calendario/                    # Calendário Geral (Coordenador)
+    │   │   │   └── page.tsx
+    │   │   │   # FUNÇÕES:
+    │   │   │   # - Visualização mensal e anual do calendário
+    │   │   │   # - Seletor de tipo de evento: AULA / SEM AULA / FERIADO / RECESSO
+    │   │   │   # - Clique em dia aplica o evento selecionado (cor + status)
+    │   │   │   # - Seleção de múltiplos dias consecutivos ou alternados
+    │   │   │   # - Dias com eventos exibidos com cor correspondente:
+    │   │   │   #   Branco=AULA, Amarelo=SEM AULA, Vermelho=FERIADO, Azul=RECESSO
+    │   │   │   # - Botão "Aplicar Alterações" — salva todas as marcações de uma vez
+    │   │   │   # - Tooltip ao hover: mostra nome do evento e impacto
+    │   │   │   # - Indicador de quantas turmas são impactadas por cada alteração
+    │   │   │
+    │   │   │
+    │   │   ├── reposicoes/                    # Gestão de Reposições (Coordenador)
+    │   │   │   ├── page.tsx                   # Lista de Reposições
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Abas: Próximas / Realizadas / Canceladas / Todas
+    │   │   │   │   # - Tabela: aluno, professor, data, horário, duração, status
+    │   │   │   │   # - Filtros: por professor, aluno, período
+    │   │   │   │   # - Botão "+ Nova Reposição"
+    │   │   │   │   # - Ações (3 pontinhos): Editar, Cancelar
+    │   │   │   │   # - Badge colorido por status
+    │   │   │   │
+    │   │   │   └── nova/
+    │   │   │       └── page.tsx               # Criar Nova Reposição (fluxo 3 etapas)
+    │   │   │       # FUNÇÕES — ETAPA 1 (Formulário):
+    │   │   │       # - Autocomplete de Aluno (busca por nome ou CPF)
+    │   │   │       # - Dropdown de Professor (ativos)
+    │   │   │       # - Date picker para data (não permite passado)
+    │   │   │       # - Time pickers: horário início e fim
+    │   │   │       # - Duração calculada automaticamente (readonly)
+    │   │   │       # - Textarea observações
+    │   │   │       # - Seção "Repetir reposição": checkbox + quantidade + intervalo
+    │   │   │       #   (Semanal / Quinzenal / Mensal)
+    │   │   │       # - Botão "Criar" → avança para Etapa 2
+    │   │   │       #
+    │   │   │       # FUNÇÕES — ETAPA 2 (Resumo + Validação):
+    │   │   │       # - Lista todas as reposições que serão criadas
+    │   │   │       # - Status de cada uma: OK (verde) ou CONFLITO (vermelho)
+    │   │   │       # - Tipo de conflito descrito inline
+    │   │   │       # - Edição inline de data/horário por linha
+    │   │   │       # - Botão "Remover" por linha
+    │   │   │       # - Botão "Confirmar" desabilitado até resolver todos os conflitos
+    │   │   │       # - Botão "Voltar" retorna ao formulário
+    │   │   │       #
+    │   │   │       # FUNÇÕES — ETAPA 3 (Confirmação):
+    │   │   │       # - Feedback de sucesso com lista das reposições criadas
+    │   │   │       # - Link para a lista de reposições
+    │   │   │
+    │   │   │
+    │   │   ├── secretaria/                    # Módulo Secretaria / Matrículas
+    │   │   │   ├── page.tsx                   # Listagem de Matrículas
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Tabela: nome do aluno, turma, status matrícula, data ingresso
+    │   │   │   │   # - Status financeiro indicado na linha (em dia / inadimplente)
+    │   │   │   │   # - Busca: por nome, CPF do aluno, nome/CPF do responsável
+    │   │   │   │   # - Filtros: por status da matrícula (Ativo, Trancado, Cancelado)
+    │   │   │   │   # - Botões de ação: Editar, Financeiro, Perfil do Aluno
+    │   │   │   │   # - Botão "+ Nova Matrícula"
+    │   │   │   │
+    │   │   │   ├── matriculas/
+    │   │   │   │   ├── nova/
+    │   │   │   │   │   └── page.tsx           # Fluxo Nova Matrícula (5 etapas)
+    │   │   │   │   │   # FUNÇÕES — ETAPA 1 (Identificação do Responsável):
+    │   │   │   │   │   # - Seleção: Pessoa Física ou Jurídica
+    │   │   │   │   │   # - Campo CPF/CNPJ com validação e máscara
+    │   │   │   │   │   # - Se CPF já existe: sugerir reaproveitar dados
+    │   │   │   │   │   # - Barra de progresso das 5 etapas no topo
+    │   │   │   │   │   #
+    │   │   │   │   │   # FUNÇÕES — ETAPA 2 (Dados do Responsável):
+    │   │   │   │   │   # - Todos os campos pessoais do responsável
+    │   │   │   │   │   # - Seção Telefones: adicionar múltiplos, marcar principal
+    │   │   │   │   │   # - Busca de CEP automática (preenche endereço)
+    │   │   │   │   │   # - Checkbox "Responsável é o próprio aluno"
+    │   │   │   │   │   #
+    │   │   │   │   │   # FUNÇÕES — ETAPA 3 (Dados do Aluno):
+    │   │   │   │   │   # - Se "próprio responsável": campos pré-preenchidos (editáveis)
+    │   │   │   │   │   # - Campos específicos do aluno: registro escolar, profissão
+    │   │   │   │   │   # - Mesmo padrão de endereço e telefones
+    │   │   │   │   │   #
+    │   │   │   │   │   # FUNÇÕES — ETAPA 4 (Filiação — opcional):
+    │   │   │   │   │   # - Formulário de filiação 1 e filiação 2 (expandível)
+    │   │   │   │   │   # - Todos os campos opcionais
+    │   │   │   │   │   #
+    │   │   │   │   │   # FUNÇÕES — ETAPA 5 (Finalização):
+    │   │   │   │   │   # - Resumo de todos os dados preenchidos
+    │   │   │   │   │   # - Validação final de campos obrigatórios
+    │   │   │   │   │   # - Botão "Salvar Matrícula" / "Cancelar"
+    │   │   │   │   │
+    │   │   │   │   ├── [id]/
+    │   │   │   │   │   └── page.tsx           # Perfil do Aluno (Secretaria)
+    │   │   │   │   │   # FUNÇÕES:
+    │   │   │   │   │   # - Header: foto, nome completo, status, data ingresso
+    │   │   │   │   │   # - Aba Dados Pessoais: visualizar todos os campos cadastrados
+    │   │   │   │   │   # - Aba Responsável: dados do responsável financeiro
+    │   │   │   │   │   # - Aba Turmas: histórico de turmas (ativas e antigas)
+    │   │   │   │   │   # - Aba Financeiro: atalho para o financeiro do aluno
+    │   │   │   │   │   # - Aba Ocorrências: listagem completa de ocorrências
+    │   │   │   │   │   # - Botão "Editar Cadastro" → abre /editar
+    │   │   │   │   │   # - Botão "Vincular a Turma"
+    │   │   │   │   │
+    │   │   │   │   └── [id]/
+    │   │   │   │       └── editar/
+    │   │   │   │           └── page.tsx       # Editar Matrícula
+    │   │   │   │           # FUNÇÕES:
+    │   │   │   │           # - Formulário pré-preenchido com os dados atuais
+    │   │   │   │           # - Mesma estrutura do fluxo de criação (editável)
+    │   │   │   │           # - Histórico de alterações na parte inferior
+    │   │   │   │           # - Alterações geram log automático via Audit.NET
+    │   │   │
+    │   │   │
+    │   │   ├── comercial/                     # Módulo Comercial
+    │   │   │   ├── page.tsx                   # Listagem de Pre-Alunos
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Funil visual de pré-alunos por status:
+    │   │   │   │   #   Em negociação / Aguardando aprovação / Aprovado / Matriculado / Cancelado
+    │   │   │   │   # - Tabela com: nome, responsável, data cadastro, tipo contrato, status
+    │   │   │   │   # - Filtros: por status, por período, por usuário que cadastrou
+    │   │   │   │   # - Botão "+ Novo Pré-Aluno"
+    │   │   │   │   # - Ações: Ver detalhes, Gerar contrato, Aprovar (Secretaria),
+    │   │   │   │   #   Finalizar Matrícula (Secretaria), Cancelar
+    │   │   │   │
+    │   │   │   ├── pre-alunos/
+    │   │   │   │   ├── novo/
+    │   │   │   │   │   └── page.tsx           # Cadastro de Pré-Aluno
+    │   │   │   │   │   # FUNÇÕES:
+    │   │   │   │   │   # - Seção Responsável: CPF/CNPJ com lookup (reaproveitamento)
+    │   │   │   │   │   # - Campos do responsável: nome, telefone, e-mail
+    │   │   │   │   │   # - Seção Pré-Aluno: nome, sobrenome, nascimento, telefone
+    │   │   │   │   │   # - Seção Comercial/Contratual:
+    │   │   │   │   │   #   Livro de interesse, Tipo de contrato, Valor da mensalidade,
+    │   │   │   │   │   #   Forma de pagamento, Material (À vista / Parcelado),
+    │   │   │   │   │   #   Valor do material, Data prevista de início
+    │   │   │   │   │   # - Campo Observações comerciais
+    │   │   │   │   │   # - Preview do valor total mensal (mensalidade + material/6 se parcelado)
+    │   │   │   │   │   # - Botão Salvar → status inicial "Em negociação"
+    │   │   │   │   │
+    │   │   │   │   └── [id]/
+    │   │   │   │       ├── page.tsx           # Detalhes do Pré-Aluno
+    │   │   │   │       │   # FUNÇÕES:
+    │   │   │   │       │   # - Todos os dados cadastrados (visualização)
+    │   │   │   │       │   # - Status badge com ações disponíveis por status:
+    │   │   │   │       │   #   "Em negociação" → Editar, Gerar Contrato, Cancelar
+    │   │   │   │       │   #   "Aguardando aprovação" → Aprovar (Secretaria), Cancelar
+    │   │   │   │       │   #   "Aprovado" → Finalizar Matrícula (Secretaria)
+    │   │   │   │       │   # - Lista de contratos gerados com data e link para visualizar
+    │   │   │   │       │   # - Botão "Editar" abre edição dos campos comerciais
+    │   │   │   │       │   # - Histórico de alterações de status
+    │   │   │   │       │
+    │   │   │   │       └── contrato/
+    │   │   │   │           └── page.tsx       # Geração / Visualização de Contrato
+    │   │   │   │           # FUNÇÕES:
+    │   │   │   │           # - Carrega o template ativo da escola
+    │   │   │   │           # - Substitui variáveis {{...}} com os dados do pré-aluno
+    │   │   │   │           # - Preview do contrato gerado em tempo real
+    │   │   │   │           # - Editor inline para ajustes pontuais no texto (sem alterar template)
+    │   │   │   │           # - Tabela de semestres gerada automaticamente (tipo contrato 24m = 4 semestres)
+    │   │   │   │           # - Botões: Imprimir / Baixar PDF / Salvar Contrato / Enviar por e-mail
+    │   │   │   │           # - Ao salvar: grava em contratos_gerados com conteúdo final
+    │   │   │   │
+    │   │   │   └── contratos/
+    │   │   │       └── template/
+    │   │   │           └── page.tsx           # Editor de Template de Contrato
+    │   │   │           # FUNÇÕES (Coordenador / Admin):
+    │   │   │           # - Editor de texto rico (tipo Word) para o modelo base
+    │   │   │           # - Painel lateral com variáveis disponíveis:
+    │   │   │           #   {{NOME_ALUNO}}, {{VALOR_MENSALIDADE}}, etc.
+    │   │   │           # - Clique na variável insere no cursor do editor
+    │   │   │           # - Botão "Adicionar variável personalizada"
+    │   │   │           # - Histórico de versões: lista com data, autor e botão "Restaurar"
+    │   │   │           # - Botão "Salvar nova versão" — cria versão com numero sequencial
+    │   │   │           # - Indicador da versão ativa atualmente
+    │   │   │           # - Preview do template com dados fictícios
+    │   │   │
+    │   │   │
+    │   │   ├── financeiro/                    # Módulo Financeiro
+    │   │   │   ├── page.tsx                   # Dashboard Financeiro
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Cards: total a receber este mês, total recebido, total vencido
+    │   │   │   │   # - Gráfico de receita mensal (últimos 6 meses)
+    │   │   │   │   # - Lista de parcelas vencidas (com link para cada aluno)
+    │   │   │   │   # - Lista de parcelas vencendo hoje / essa semana
+    │   │   │   │   # - Filtro por conta bancária
+    │   │   │   │   # - Atalhos: Contas, Categorias, Movimentações
+    │   │   │   │
+    │   │   │   ├── aluno/
+    │   │   │   │   └── [alunoId]/
+    │   │   │   │       └── page.tsx           # Financeiro do Aluno
+    │   │   │   │       # FUNÇÕES:
+    │   │   │   │       # - Header: nome, book atual, data ingresso, prof atual
+    │   │   │   │       # - Botão "+ Nova Parcela"
+    │   │   │   │       # - Botão "Opções das Parcelas Selecionadas" (batch):
+    │   │   │   │       #   Criar Carnê Escolar (PDF), Baixa em lote
+    │   │   │   │       # - Tabela de parcelas: checkbox, turma, tipo, vencimento,
+    │   │   │   │       #   valor, valor pago, valor devido, última modificação, ações
+    │   │   │   │       # - Código de cor por linha: branca=pendente, verde=pago, vermelho=vencido
+    │   │   │   │       # - 3 pontinhos: Editar, Inativar, Recibo de Pagamento
+    │   │   │   │       # - Modal "+ Nova Parcela": formulário completo de criação
+    │   │   │   │       # - Modal "Editar Parcela": resumo + histórico de movimentações
+    │   │   │   │       #   campos editáveis com ícone de caneta
+    │   │   │   │       #   histórico cronológico com estornos destacados
+    │   │   │   │
+    │   │   │   ├── contas/
+    │   │   │   │   └── page.tsx               # Contas Bancárias
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Lista de contas com nome, saldo inicial, status
+    │   │   │   │   # - Botão "+ Nova Conta"
+    │   │   │   │   # - Editar / Ativar / Inativar conta
+    │   │   │   │   # - Saldo atual calculado (saldo inicial + entradas - saídas)
+    │   │   │   │
+    │   │   │   ├── categorias/
+    │   │   │   │   └── page.tsx               # Categorias Financeiras
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Lista de categorias com nome, tipo (Crédito/Débito/Parcela), status
+    │   │   │   │   # - Botão "+ Nova Categoria"
+    │   │   │   │   # - Editar / Inativar categoria
+    │   │   │   │   # - Agrupadas por tipo
+    │   │   │   │
+    │   │   │   └── movimentacoes/
+    │   │   │       └── page.tsx               # Movimentações Financeiras
+    │   │   │       # FUNÇÕES:
+    │   │   │       # - Tabela de movimentações: data, conta, categoria, tipo, valor, descrição
+    │   │   │       # - Filtros: por conta, por tipo, por período, por categoria
+    │   │   │       # - Saldo por conta no topo
+    │   │   │       # - Exportar para Excel/CSV
+    │   │   │       # - Registros imutáveis — sem botão de edição (conforme regra)
+    │   │   │
+    │   │   │
+    │   │   ├── arquivos/                      # Painel de Provas (Coordenador)
+    │   │   │   └── page.tsx
+    │   │   │   # FUNÇÕES:
+    │   │   │   # - Accordion de 3 níveis: Livro → Agrupamento de Units → Arquivos
+    │   │   │   # - Ícone de seta para expandir/recolher cada nível
+    │   │   │   # - Cada arquivo exibe: nome, tipo (Prova/Material/Gabarito), tamanho
+    │   │   │   # - Botão "Imprimir" → abre PDF no navegador
+    │   │   │   # - 3 pontinhos: Editar nome/arquivo, Inativar (soft delete)
+    │   │   │   # - Botão "+ Upload" por agrupamento de units
+    │   │   │   # - Formatos aceitos: PDF, .doc, .docx
+    │   │   │   # - Drag & drop de arquivos
+    │   │   │   # - Filtro por livro ativo
+    │   │   │
+    │   │   │
+    │   │   ├── usuarios/                      # Gestão de Usuários (Admin)
+    │   │   │   ├── layout.tsx
+    │   │   │   │   # Verifica policy GERENCIAR_USUARIOS no JWT
+    │   │   │   │
+    │   │   │   ├── page.tsx                   # Listagem de Usuários
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Tabela: nome, e-mail, perfil, status, data criação
+    │   │   │   │   # - Filtros: por perfil, por status
+    │   │   │   │   # - Busca por nome ou e-mail
+    │   │   │   │   # - Botão "+ Novo Usuário"
+    │   │   │   │   # - Ações: Editar, Gerenciar Permissões, Ativar/Inativar
+    │   │   │   │
+    │   │   │   ├── novo/
+    │   │   │   │   └── page.tsx               # Criar Novo Usuário
+    │   │   │   │   # FUNÇÕES:
+    │   │   │   │   # - Campos: nome completo, e-mail, senha, perfil, status
+    │   │   │   │   # - Ao selecionar perfil: mostra preview das permissões padrão
+    │   │   │   │   # - Validação: e-mail único por escola
+    │   │   │   │   # - Salvar → cria usuário + pre-popula usuario_permissoes
+    │   │   │   │   #   com as permissões padrão do perfil (perfil_permissoes)
+    │   │   │   │
+    │   │   │   └── [id]/
+    │   │   │       ├── page.tsx               # Perfil do Usuário
+    │   │   │       │   # FUNÇÕES:
+    │   │   │       │   # - Visualizar e editar dados do usuário
+    │   │   │       │   # - Ativar / Inativar usuário
+    │   │   │       │   # - Alterar perfil (com aviso sobre impacto nas permissões)
+    │   │   │       │   # - Link para página de permissões
+    │   │   │       │
+    │   │   │       └── permissoes/
+    │   │   │           └── page.tsx           # Gerenciar Permissões do Usuário
+    │   │   │           # FUNÇÕES:
+    │   │   │           # - Lista todas as permissões do sistema agrupadas por módulo
+    │   │   │           # - Toggle (on/off) por permissão — mostra quais o usuário tem
+    │   │   │           # - Badge "Padrão do perfil" vs "Personalizada"
+    │   │   │           # - Botão "Restaurar padrões do perfil"
+    │   │   │           # - Histórico: quem concedeu cada permissão e quando
+    │   │   │           # - Salvar → atualiza usuario_permissoes + regenera token na próxima sessão
+    │   │   │
+    │   │   │
+    │   │   └── configuracoes/                 # Configurações da Escola (Admin)
+    │   │       └── page.tsx
+    │   │       # FUNÇÕES:
+    │   │       # - Dados da escola: nome fantasia, razão social, CNPJ (somente leitura)
+    │   │       # - Código da escola (somente leitura — não pode alterar)
+    │   │       # - Configurações de segurança: N tentativas de login, tempo de bloqueio
+    │   │       # - Tempo de expiração do JWT
+    │   │       # - Contas bancárias padrão
+    │   │       # - Perfis disponíveis na escola (visualização)
+    │
+    ├── components/                            # Componentes globais reutilizáveis
+    │   ├── ui/                                # Primitivos de UI (Button, Input, Modal, etc.)
+    │   ├── layout/
+    │   │   ├── Sidebar.tsx                    # Menu lateral filtrado por permissões
+    │   │   ├── Header.tsx                     # Header com nome, perfil, logout
+    │   │   └── PageHeader.tsx                 # Título + breadcrumb de cada página
+    │   ├── auth/
+    │   │   ├── PermissionGuard.tsx            # Wrapper: exibe filho só se tiver a policy
+    │   │   └── RoleGuard.tsx                  # Wrapper: exibe filho só se tiver o perfil
+    │   ├── data/
+    │   │   ├── DataTable.tsx                  # Tabela reutilizável com filtros e paginação
+    │   │   ├── StatusBadge.tsx                # Badge colorido por status
+    │   │   └── EmptyState.tsx                 # Tela vazia com ilustração
+    │   └── forms/
+    │       ├── CpfInput.tsx                   # Input CPF/CNPJ com validação e máscara
+    │       ├── CepInput.tsx                   # Input CEP com auto-preenchimento de endereço
+    │       └── PhoneInput.tsx                 # Input telefone com máscara
+    │
+    ├── hooks/
+    │   ├── useAuth.ts                         # Lê JWT do contexto: usuario, escola, permissoes
+    │   ├── usePermission.ts                   # hasPermission('CRIAR_PRE_ALUNO') → boolean
+    │   └── useDebounce.ts                     # Debounce para campos de busca
+    │
+    ├── lib/
+    │   ├── api.ts                             # Cliente HTTP base (fetch + interceptor de token)
+    │   ├── auth.ts                            # Funções de login, logout, refresh token
+    │   └── utils.ts                           # Formatações: moeda, data, CPF, telefone
+    │
+    ├── types/
+    │   ├── auth.ts                            # JwtPayload, UserContext, Permissao
+    │   ├── turma.ts
+    │   ├── aluno.ts
+    │   ├── financeiro.ts
+    │   ├── comercial.ts
+    │   └── api.ts                             # ApiResponse<T>, PaginatedResponse<T>
+    │
+    └── middleware.ts
+        # FUNÇÕES:
+        # - Intercepta todas as rotas do Next.js
+        # - Rotas (public)/*: sem verificação
+        # - Rotas (super-admin)/*: verifica is_super_admin no JWT
+        # - Rotas (auth)/*: verifica JWT válido + escola ativa
+        # - Redireciona para /login se não autenticado
+        # - Redireciona para /dashboard se autenticado tentando acessar /login
+
+
+# ─────────────────────────────────────────────────────────────
+# RESUMO — PÁGINAS POR MÓDULO
+# ─────────────────────────────────────────────────────────────
+#
+# Públicas (1):
+#   /login
+#
+# Super Admin (3):
+#   /super-admin/dashboard
+#   /super-admin/escolas
+#   /super-admin/escolas/nova
+#   /super-admin/escolas/[id]
+#
+# Dashboard (1):
+#   /dashboard
+#
+# Professor (3):
+#   /professor
+#   /professor/turma/[id]
+#   /professor/turma/[id]/aluno/[alunoId]
+#
+# Turmas — Coordenador (3):
+#   /turmas
+#   /turmas/nova
+#   /turmas/[id]
+#
+# Books — Coordenador (3):
+#   /books
+#   /books/novo
+#   /books/[id]
+#
+# Calendário — Coordenador (1):
+#   /calendario
+#
+# Reposições — Coordenador (2):
+#   /reposicoes
+#   /reposicoes/nova
+#
+# Secretaria / Matrículas (4):
+#   /secretaria
+#   /secretaria/matriculas/nova
+#   /secretaria/matriculas/[id]
+#   /secretaria/matriculas/[id]/editar
+#
+# Comercial (5):
+#   /comercial
+#   /comercial/pre-alunos/novo
+#   /comercial/pre-alunos/[id]
+#   /comercial/pre-alunos/[id]/contrato
+#   /comercial/contratos/template
+#
+# Financeiro (5):
+#   /financeiro
+#   /financeiro/aluno/[alunoId]
+#   /financeiro/contas
+#   /financeiro/categorias
+#   /financeiro/movimentacoes
+#
+# Arquivos (1):
+#   /arquivos
+#
+# Usuários — Admin (4):
+#   /usuarios
+#   /usuarios/novo
+#   /usuarios/[id]
+#   /usuarios/[id]/permissoes
+#
+# Configurações — Admin (1):
+#   /configuracoes
+#
+# TOTAL: 40 páginas

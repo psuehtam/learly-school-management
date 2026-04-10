@@ -1,0 +1,1513 @@
+
+
+
+
+LEARLY
+Especificacao de Requisitos de Software
+
+Versao 4.0
+Sistema de Gestao para Escola de Idiomas
+
+
+Camada	Tecnologia
+Frontend	Next.js (React)
+Backend	C# (.NET)
+Banco de Dados	MySQL 8+ (utf8mb4)
+ORM	Entity Framework Core — Database First
+Auditoria	Audit.NET integrado ao EF SaveChanges
+
+
+
+
+
+
+
+
+ 
+Controle de Versoes
+Versao	Data	Autor	Descricao das Alteracoes
+1.0	—	Equipe Learly	Versao inicial — escopo funcional
+2.0	—	Equipe Learly	Adicao de modelo de banco de dados e multi-tenancy
+3.0	19/03/2026	Equipe Learly	Integracao completa: interface + banco + regras de negocio + Audit.NET + fusos horarios + indices de performance
+4.0	25/03/2026	Equipe Learly	Perfil Comercial, modulo Pre-Aluno, Contratos dinamicos, Policy-Based Authorization, Super Admin, novas tabelas de permissoes e contratos
+
+
+Como usar este documento
+Este documento descreve TODOS os requisitos do sistema Learly: funcionais (o que o sistema faz), de interface (como as telas se comportam) e tecnicos (como o banco de dados e a arquitetura suportam cada funcionalidade).
+Seccoes 1-4: visao geral, usuarios, acesso e login.
+Seccoes 5-6: telas do Professor e do Coordenador com todos os detalhes de interface.
+Secao 7: modulo financeiro completo.
+Secao 8: modelo de banco de dados, tabelas, indices e decisoes de arquitetura.
+Secao 9 (Coordenador 6.7): Gestao de Reposicoes.
+Secao 10 (nova): Modulo Comercial — Pre-Aluno e Contratos.
+Secao 11 (nova): Controle de Acesso Avancado — Policy-Based Authorization.
+ 
+1. Visao Geral do Sistema
+O Learly e um sistema web de gestao completa para escolas de idiomas. Seu objetivo e centralizar, organizar e automatizar os processos academicos, administrativos e financeiros da instituicao, eliminando controles manuais em planilhas, evitando inconsistencias de dados e garantindo historico auditavel de todas as informacoes.
+
+A aplicacao e 100% web, acessada via navegador moderno, sem necessidade de instalacao. A autenticacao e individual por usuario, e o controle de permissoes e baseado em perfis configurados no backend — cada usuario visualiza e executa apenas as acoes autorizadas para sua funcao.
+
+1.1 Principios Fundamentais do Sistema
+Regra 1 — Sem exclusao fisica (Soft Delete)
+Nenhum dado podera ser excluido fisicamente do banco de dados.
+Todo registro que deixar de ser utilizado deve ser marcado com status = 'Inativo', preservando historico completo, rastreabilidade e conformidade legal.
+Exemplos: inativar um aluno, um livro, uma turma, um arquivo ou uma parcela — nunca deletar.
+
+Regra 2 — Auditoria total (Audit Log)
+Toda acao relevante no sistema gera automaticamente um registro em logs_auditoria.
+Cada log contem: data/hora (UTC), usuario, nome do usuario no momento da acao, tabela afetada, id do registro, tipo de acao (INSERT/UPDATE/DELETE/LOGIN/LOGOUT), dados anteriores e novos em JSON.
+Os logs sao imutaveis: nunca podem ser alterados ou excluidos.
+Implementacao tecnica: Audit.NET integrado ao Entity Framework Core interceptando SaveChanges.
+
+Regra 3 — Multi-tenant isolado
+O sistema suporta multiplas escolas na mesma instalacao (multi-tenant).
+Todo registro do banco contem escola_id, garantindo isolamento total: dados de uma escola nunca aparecem para outra.
+Consultas, relatorios e logs sao sempre filtrados por escola_id.
+
+Regra 4 — Fusos horarios (UTC)
+Todos os campos de data/hora sao do tipo DATETIME e gravados em UTC pela aplicacao.
+A conversao para o fuso horario local (ex: America/Sao_Paulo) ocorre exclusivamente no frontend.
+Motivo: evitar inconsistencias em escolas que possam estar em fusos diferentes (ex: Brasilia UTC-3 vs Manaus UTC-4).
+
+1.2 Stack Tecnologica
+Camada	Tecnologia	Observacao
+Frontend	Next.js (React)	Renderizacao SSR + CSR, rotas por perfil
+Backend	C# (.NET)	API RESTful, camada de servicos, injecao de dependencia
+Banco de Dados	MySQL 8+ utf8mb4	Charset utf8mb4 no banco E nas conexoes (SET NAMES utf8mb4)
+ORM	Entity Framework Core	Database First — classes geradas a partir do schema
+Auditoria	Audit.NET + EF interceptor	Captura automatica de INSERT/UPDATE/DELETE
+Autenticacao	JWT	Token com escola_id, perfil_id e lista de permissoes (claims) embutidos
+Autorizacao	Policy-Based (.NET)	Endpoints protegidos por policies granulares — ex: [Authorize(Policy="CRIAR_PRE_ALUNO")]
+
+1.3 Estrutura de Menus por Perfil
+Modulo / Menu	Professor	Coordenador	Comercial	Secretaria	Financeiro	Administrador
+Minhas Aulas (Agenda)	Sim	Sim (global)	Nao	Nao	Nao	Nao
+Turmas	Somente leitura	Sim (CRUD)	Nao	Nao	Nao	Sim
+Pre-Aluno / Comercial	Nao	Nao	Sim (CRUD)	Nao	Nao	Sim
+Secretaria / Matricula	Nao	Sim	Nao	Sim	Nao	Sim
+Contratos	Nao	Editar template	Gerar/visualizar	Visualizar	Nao	Sim
+Books (Livros)	Somente leitura	Sim (CRUD)	Nao	Nao	Nao	Sim
+Financeiro	Nao	Nao	Nao	Nao	Sim	Sim
+Arquivos (Provas)	Somente leitura	Sim	Nao	Nao	Nao	Sim
+Calendario Geral	Nao	Sim	Nao	Nao	Nao	Sim
+Usuarios	Nao	Nao	Nao	Nao	Nao	Sim
+Relatorios	Parcial	Sim	Parcial	Parcial	Sim	Sim
+Super Admin	Nao	Nao	Nao	Nao	Nao	Somente Super Admin
+
+ 
+2. Tipos de Usuarios e Perfis de Acesso
+O sistema opera com seis perfis de usuario. A partir da v4, o controle de acesso e baseado em Policy-Based Authorization — cada perfil possui um conjunto de permissoes (policies) que controlam acoes especificas, nao apenas acesso a telas. Ver Secao 10 para detalhes.
+
+Perfil	Responsabilidade Principal	Acesso Critico
+Professor	Gestao academica das proprias turmas	Chamada, homework, avaliacoes, ocorrencias
+Coordenador	Controle pedagogico global e organizacao de turmas	Agenda geral, turmas, matriculas, calendario, books, arquivos, editar template de contrato
+Comercial	Gestao do processo comercial e captacao de alunos	Cadastro de pre-alunos, geracao e visualizacao de contratos
+Secretaria	Finalizacao de matriculas e gestao administrativa	Finalizar matricula, aprovar matricula, visualizar contratos
+Financeiro	Gestao das parcelas e movimentacoes financeiras	Parcelas, historico financeiro, carne escolar
+Administrador	Configuracao total do sistema e gestao de escolas	Usuarios, permissoes, todas as telas. Super Admin gerencia escolas.
+
+Nota sobre permissoes granulares
+Dentro de cada perfil, as permissoes sao verificadas no backend a cada requisicao. O frontend adapta a interface (oculta botoes, desabilita campos) com base no perfil do JWT, mas a validacao real ocorre na API.
+Exemplo: o Professor ve o botao 'Acessar Turma' apenas para suas proprias turmas. O Coordenador ve todas.
+
+3. Controle de Acesso e Usuarios
+3.1 Cadastro de Usuarios
+O cadastro de novos usuarios e realizado exclusivamente pelo perfil Administrador, acessando o menu Usuarios no painel de configuracoes do sistema.
+
+Botao principal: + Novo Usuario
+
+3.1.1 Campos do Formulario de Cadastro
+Campo	Obrigatorio	Observacoes
+Nome completo	Sim	Exibido em logs e historico
+E-mail	Sim	Serve como login; unico por escola
+Senha	Sim	Minimo 8 caracteres, letra maiuscula e numero obrigatorios
+Perfil (tipo de usuario)	Sim	Professor / Coordenador / Comercial / Secretaria / Financeiro / Administrador
+Permissoes especificas	Sim	Atribuidas por politica (Policy) — configuradas pelo Administrador por usuario
+Status	Sim	Ativo (padrao) / Inativo
+
+3.1.2 Regras e Validacoes
+•	E-mail deve ser unico dentro da mesma escola (UNIQUE escola_id + email no banco).
+•	Usuarios com status Inativo nao conseguem autenticar no sistema — o token JWT nao e gerado.
+•	O sistema registra automaticamente data_criacao e data_atualizacao em cada usuario.
+•	A senha e armazenada com hash (bcrypt ou equivalente) — nunca em texto plano.
+•	Apenas o Administrador pode alterar o perfil de outro usuario.
+•	O Administrador nao pode inativar a si proprio.
+
+4. Tela de Login
+Tela inicial do sistema, responsavel pela autenticacao do usuario. E a unica tela publica — todas as demais requerem sessao ativa.
+
+4.1 Composicao da Tela
+Elemento	Tipo	Comportamento
+Codigo da escola	Input text	Campo obrigatorio. Ex: CWB01. Identifica a escola no sistema multi-tenant.
+E-mail	Input text	Nao pode estar vazio; validacao de formato de e-mail
+Senha	Input password	Icone para exibir/ocultar o texto da senha
+Botao Entrar	Button primary	Dispara autenticacao; desabilitado durante carregamento
+Mensagem de erro	Alert inline	Exibida abaixo do formulario em caso de falha
+
+4.2 Fluxo de Autenticacao
+1.	Usuario informa codigo da escola, e-mail e senha e clica em Entrar.
+2.	Backend valida o codigo da escola: localiza escola com status = 'Ativo'. Se invalido, retorna erro generico.
+3.	Backend valida credenciais: busca usuario pelo e-mail DENTRO da escola identificada, compara hash da senha, checa status = 'Ativo'.
+4.	Em caso de sucesso: busca permissoes (policies) do usuario. Gera JWT com escola_id, usuario_id, perfil_id, lista de permissoes como claims e tempo de expiracao. Registra LOGIN em logs_auditoria.
+5.	Frontend armazena o token e redireciona para a tela inicial do perfil correspondente.
+6.	Em caso de falha: exibe mensagem clara ('E-mail ou senha invalidos'). Nao revela qual dos dois esta errado.
+
+4.3 Regras de Seguranca
+•	Bloqueio temporario apos N tentativas invalidas consecutivas (N configuravel pelo Administrador).
+•	O tempo de bloqueio tambem e configuravel (ex: 5 minutos).
+•	Todas as tentativas de login (sucesso e falha) sao registradas em logs_auditoria.
+•	O token JWT expira apos periodo configuravel; o sistema solicita novo login ao expirar.
+
+ 
+5. Modulo do Professor
+Apos autenticar, o professor e redirecionado automaticamente para sua Agenda de Aulas. O modulo do professor e composto por tres telas principais, acessiveis de forma encadeada:
+
+Tela	Como acessar	Funcao
+5.1 Visao Geral das Aulas	Tela inicial apos login	Ver todas as aulas do dia/semana com cards resumidos
+5.2 Gerenciamento da Turma	Botao Acessar Turma no card	Chamada, homework, avaliacoes e ocorrencias da turma
+5.3 Perfil/Historico do Aluno	Clicar no nome do aluno na turma	Historico individual do aluno (ocorrencias, notas, presenca)
+
+5.1 Visao Geral das Aulas (Agenda do Professor)
+Permite ao professor visualizar de forma rapida e organizada todas as suas aulas, agrupadas por dia da semana e turno. A tela e somente leitura — nao e possivel editar nenhum dado diretamente aqui.
+
+5.1.1 Layout da Tela
+Regiao	Conteudo
+Menu lateral esquerdo	Dias da semana: Segunda a Sabado. Dia atual destacado visualmente. Nome e foto do professor logado.
+Campo de busca (lateral)	Filtro em tempo real por: nome do aluno, nome da turma, nome do livro ou horario.
+Area principal (centro)	Cards de aulas agrupados por turno: Morning, Afternoon, Evening.
+
+5.1.2 Turnos e Horarios
+Turno	Criterio de horario	Exibicao
+Morning (Manha)	Aulas com horario_inicio <= 12:00	Bloco superior da area principal
+Afternoon (Tarde)	Aulas com horario_inicio > 12:00 e <= 18:00	Bloco intermediario
+Evening (Noite)	Aulas com horario_inicio > 18:00	Bloco inferior
+
+Nota de implementacao — horarios flexiveis
+Os horarios das aulas nao precisam ser fixos ou de hora em hora. O professor pode ter uma aula as 09:15 e outra as 14:45, por exemplo.
+A classificacao em turnos e feita dinamicamente com base no campo horario_inicio da tabela aulas.
+A interface e semelhante ao Google Calendar — as aulas sao posicionadas no eixo de tempo conforme o horario real.
+
+5.1.3 Card de Aula — Conteudo Detalhado
+Cada aula e representada por um card/bloco visual contendo as seguintes informacoes:
+Informacao no Card	Origem no Banco	Observacao
+Nome da turma	turmas.nome	Ex: BOOK 5 B5 TEENS / 02 SEG 14:30
+Horario (inicio - fim)	aulas.horario_inicio / horario_fim	Ex: 14:30 - 16:00
+Lista resumida de alunos	matriculas + alunos	Nomes dos alunos ativos na turma
+Capitulo atual	turmas_capitulos_progresso + capitulos	Capitulo em andamento (nao concluido)
+Progresso visual	turmas_capitulos_progresso	Barra ou indicador: X de Y capitulos concluidos
+Conteudo dado na ultima aula	aulas.conteudo_dado	Ex: Review 1-3, Unit 15
+Data de inicio da turma	turmas.data_inicio	
+Data prevista de termino	turmas.data_termino_prevista	Recalculada automaticamente
+Observacoes gerais	turmas.observacoes	Campo livre do coordenador
+
+Exemplo visual de card de aula
+BOOK 1 TEENS / 20 SEG
+09:00 - 11:00
+Alunos: 1. Bernardo Siqueira  2. Eduardo Fuck  3. Evelin Goncalves  4. Felipe Dalla Valle  5. Julia Chueri  6. Ruan Carlos Leal
+Atual: Review 1-3
+[Botao] Acessar Turma
+
+5.1.4 Acao do Card
+•	Botao 'Acessar Turma': redireciona para a Tela de Gerenciamento da Turma (Secao 5.2).
+•	Cards de dias marcados como Feriado/Recesso no Calendario Geral sao exibidos com cor de destaque (sem aula agendada).
+
+5.2 Tela de Gerenciamento da Turma
+Tela central de trabalho do professor. Permite realizar todo o controle academico de uma turma especifica: chamada, homework, avaliacoes e registro de ocorrencias.
+Layout: planilha academica com linhas representando aulas e alunos, e colunas representando presenca, tarefas e avaliacoes.
+
+5.2.1 Cabecalho da Turma (Somente Leitura)
+Exibido no topo fixo da tela, para referencia do professor. Nenhum campo pode ser alterado aqui.
+Campo exibido	Exemplo
+Livro	Book 5 Teens
+Codigo/nome da turma	BOOK 5 B5 TEENS / 02 SEG 14:30
+Sala	Sala 03
+Professor responsavel	Lucas Ferreira
+Dia(s) da semana e horario	Segundas-feiras, 14:30 as 16:00
+Status da turma	Em Andamento
+
+5.2.2 Controle de Presenca
+Para cada aula registrada na turma, o professor lanca a presenca individualmente por aluno.
+
+Campo da linha de aula	Conteudo
+Data da aula	Data real da aula (aulas.data_aula)
+Numero da aula	Numero sequencial da aula na turma (ex: Aula 12)
+Capitulo planejado	Nome do capitulo vinculado (capitulos.nome)
+Conteudo dado	Campo editavel: o professor registra o que foi ensinado (ex: Unit 15, Review 1-3)
+Status por aluno	Botoes ou dropdown: P (Presente), F (Falta), FJ (Falta Justificada), R (Reposicao)
+
+Status	Significado	Impacto no calculo de faltas
+P — Presente	Aluno compareceu normalmente	Nao conta como falta
+F — Falta	Ausencia sem justificativa	Conta como falta
+FJ — Falta Justificada	Ausencia com justificativa formal	Conta como falta mas e distinguida em relatorios
+R — Reposicao	Aula de reposicao realizada	Abate falta anterior
+
+Regras automaticas:
+•	O sistema contabiliza automaticamente o total de faltas por aluno na turma.
+•	O historico de presenca e acumulado durante todo o curso — consulta retroativa disponivel.
+•	A contagem considera todas as aulas com status 'Realizada' para o calculo percentual de frequencia.
+
+5.2.3 Progresso de Capitulos
+Ao finalizar uma aula, o professor pode marcar o capitulo correspondente como concluido diretamente na tela da chamada.
+
+Cenario	Acao do professor	Comportamento do sistema
+Capitulo concluido na aula	Clica no botao 'Marcar capitulo como concluido'	Grava concluido=true e data_conclusao em turmas_capitulos_progresso
+Capitulo NAO concluido	Finaliza a aula sem marcar conclusao	Sistema exibe opcao: 'Adicionar mais uma aula para este capitulo?'
+Professor adiciona aula extra	Confirma a opcao de aula adicional	Nova aula e gerada para o mesmo capitulo, mantendo sequencia numerica
+
+Importante — progresso isolado por turma
+O progresso de cada capitulo e registrado individualmente por turma na tabela turmas_capitulos_progresso.
+O mesmo capitulo pode estar em andamento em turmas diferentes simultaneamente — o progresso de uma nao afeta a outra.
+O card na Agenda (Secao 5.1.3) exibe o capitulo atual buscando o primeiro capitulo nao concluido desta turma.
+
+5.2.4 Controle de Homework
+Para cada aula, o professor pode registrar a nota de homework de cada aluno.
+Campo	Tipo	Regras
+Nota de homework	Decimal 0 a 10	Campo editavel por aula e por aluno; permite edicao posterior
+Media de homework	Calculada automaticamente	Media aritmetica de todas as notas lancadas do aluno na turma
+Historico	Visualizavel	Todas as notas ficam registradas e podem ser consultadas
+
+5.2.5 Avaliacoes
+Cada turma possui 5 avaliacoes fixas, vinculadas ao livro. As avaliacoes sao lancadas individualmente por aluno e ficam registradas permanentemente.
+Avaliacao	Descricao	Peso / Observacao
+Speaking	Avaliacao oral — fluencia e pronuncia	Individual por aluno
+Listening	Avaliacao de compreensao auditiva	Individual por aluno
+Writing	Avaliacao de producao escrita	Individual por aluno
+Class Participation	Participacao e engajamento nas aulas	Individual por aluno
+Avaliacao Final	Prova final do livro/nivel	Individual por aluno
+
+•	Notas: decimal de 0 a 10 (ex: 7.5, 9.0).
+•	O sistema calcula automaticamente a media das 5 avaliacoes por aluno.
+•	O historico de avaliacoes e consultavel por livro e por aluno — mesmo apos remanejamento de turma.
+•	Unicidade garantida no banco: UNIQUE (turma_id, aluno_id, tipo_avaliacao) — evita lancamento duplicado.
+
+5.2.6 Ocorrencias Academicas
+Na tela de gerenciamento da turma, o professor pode acessar o perfil de qualquer aluno e registrar ocorrencias. Ao clicar no nome do aluno, abre-se o Historico Individual.
+
+Campo da ocorrencia	Obrigatorio	Descricao
+Data	Sim	Data da ocorrencia (pode ser retroativa)
+Hora	Sim	Horario da ocorrencia
+Tipo	Sim	Academica (Professor e Coordenador) ou Administrativa (apenas Coordenador)
+Descricao	Sim	Texto livre descrevendo a ocorrencia (ex: comportamento, participacao, orientacao pedagogica)
+Resolucao	Nao	Texto livre com a medida ou encaminhamento adotado
+Aula vinculada	Nao	Opcao de vincular a ocorrencia a uma aula especifica
+
+Restricao de perfil — Ocorrencias
+Professor: pode registrar SOMENTE ocorrencias do tipo 'Academica' e somente vinculadas a aulas de suas proprias turmas.
+Coordenador: pode registrar tanto 'Academica' quanto 'Administrativa', para qualquer aluno.
+Todos os registros sao permanentes — nao podem ser excluidos, apenas editados com log de auditoria.
+
+ 
+6. Modulo do Coordenador
+O Coordenador e o perfil com maior abrangencia academica do sistema. Tem acesso a visao global de todas as turmas e professores, sendo responsavel pelo planejamento pedagogico, organizacao de turmas, matriculas, calendario letivo e gestao de arquivos.
+
+Funcionalidade	Descricao resumida
+6.1 Calendario Geral	Gerencia feriados, recessos e eventos que cancelam aulas
+6.2 Agenda Global	Visao da agenda de todos os professores por data
+6.3 Turmas	CRUD completo de turmas, agendamento, remanejamento
+6.4 Livros (Books)	Catalogo de livros e capitulos
+6.5 Matriculas	Cadastro completo de alunos e responsaveis
+6.6 Arquivos (Painel de Provas)	Upload e organizacao de materiais pedagogicos
+
+6.1 Calendario Geral
+Permite ao Coordenador gerenciar o calendario letivo da escola, marcando dias que alteram a programacao normal de aulas. O sistema ajusta automaticamente a agenda de todas as turmas e recalcula as datas de termino.
+
+6.1.1 Tela do Calendario
+Elemento	Descricao
+Visualizacao	Calendario mensal ou anual, com navegacao entre meses
+Seletor de tipo de evento	Botoes de acao abaixo do calendario para selecionar o tipo antes de clicar nos dias
+Dias marcados	Exibidos com cor de destaque conforme o tipo de evento
+Botao Aplicar Alteracoes	Confirma e salva todas as marcacoes realizadas
+
+6.1.2 Tipos de Evento e Impactos
+Tipo de Evento	Cor no Calendario	Impacto nas Aulas	Exemplo de uso
+AULA	Branco (padrao)	Nenhum — dia normal	Dias letivos normais
+SEM AULA	Amarelo	Cancela aulas previstas neste dia	Reuniao de professores, event interno
+FERIADO	Vermelho claro	Cancela aulas e justifica ausencia dos alunos	Feriado nacional ou municipal
+RECESSO	Azul claro	Cancela aulas por periodo de ferias	Ferias escolares, recesso de julho
+
+6.1.3 Fluxo de Marcacao
+7.	Coordenador seleciona o tipo de evento desejado no seletor (ex: FERIADO).
+8.	Clica nos dias do calendario para aplicar o evento — cada clique aplica o status e a cor correspondente.
+9.	E possivel selecionar multiplos dias consecutivos ou alternados em sequencia rapida.
+10.	Clica em 'Aplicar Alteracoes' para confirmar e salvar.
+
+6.1.4 Regras de Impacto no Sistema
+•	Turmas com aulas previstas nos dias marcados como SEM AULA, FERIADO ou RECESSO: o sistema ignora automaticamente essas datas no calculo das aulas geradas.
+•	A data prevista de termino de todas as turmas afetadas e recalculada automaticamente.
+•	Na Agenda do Professor (Secao 5.1), os dias marcados aparecem com destaque de cor, indicando sem aula.
+•	Toda inclusao ou alteracao no Calendario e registrada em logs_auditoria com usuario, data, hora e tipo de evento.
+
+Exemplo pratico
+Coordenador marca o dia 07/09 como FERIADO.
+O sistema verifica todas as turmas que tinham aula naquele dia (segunda-feiras, quartas-feiras, etc.).
+As aulas previstas para 07/09 sao automaticamente canceladas.
+A data de termino de cada turma afetada e empurrada em 1 aula.
+O professor ve o dia 07/09 com fundo vermelho claro em sua agenda.
+
+6.2 Agenda Global (Visao do Coordenador)
+O Coordenador possui uma visao global da agenda de todos os professores, semelhante a tela do professor mas abrangendo toda a escola.
+
+6.2.1 Layout da Agenda Global
+Elemento	Descricao
+Seletor de data	Calendario para escolher o dia a visualizar
+Colunas	Uma coluna por professor ativo na escola
+Linhas	Eixo de horario (ex: 08:00 as 21:00 em intervalos de 30 min)
+Cards de aula	Posicionados no cruzamento do professor x horario, com detalhes da turma
+Busca lateral	Filtrar por aluno, turma ou livro para destacar cards especificos
+
+6.2.2 Conteudo do Card na Agenda Global
+Informacao	Origem no Banco
+Nome da turma	turmas.nome
+Horario (inicio - fim)	aulas.horario_inicio / aulas.horario_fim
+Lista de alunos	matriculas + alunos (ativos)
+Capitulo/conteudo atual	turmas_capitulos_progresso + capitulos + aulas.conteudo_dado
+Botao Acessar Turma	Redireciona para Gerenciamento da Turma
+Observacao de remanejamento	Se aplicavel: destaque visual no card
+
+Tabelas criadas para suportar a agenda
+turmas_dias_semana: dias da semana de cada turma como inteiro (0=Dom, 1=Seg ... 6=Sab), um registro por dia.
+aulas.horario_inicio e aulas.horario_fim: horarios por aula individual, herdados de turmas.horario na geracao automatica, editaveis por substituicao.
+aulas.professor_id: registra qual professor ministrou cada aula — suporta substituicoes pontuais.
+aulas.conteudo_dado VARCHAR(200): campo preenchido pelo professor durante a chamada.
+Indice idx_aulas_escola_data (escola_id, data_aula, status): garante performance na query principal da agenda.
+
+6.3 Turmas — Ciclo de Vida Completo
+O modulo de turmas e o nucleo do planejamento pedagogico. Uma turma representa um grupo de alunos cursando um livro especifico com um professor, em horarios definidos.
+
+6.3.1 Listagem de Turmas
+Acesso pelo menu Turmas. Exibe todas as turmas da escola com filtros e busca.
+Filtro / Busca	Descricao
+Por livro	Filtra turmas que usam um determinado livro
+Por professor	Filtra turmas de um professor especifico
+Por dia da semana	Ex: mostrar apenas turmas de segunda-feira
+Por turno	Morning / Afternoon / Evening
+Por status	Em Espera / Em Andamento / Concluida / Cancelada / Inativa
+
+Status possiveis de uma turma:
+Status	Quando ocorre	Aparece na agenda?
+Em Espera	Turma criada sem dia/horario definido	Nao — fica na guia 'Turmas em Espera'
+Em Andamento	Apos agendamento confirmado	Sim
+Concluida	Todas as aulas e capitulos finalizados	Somente leitura
+Cancelada	Encerramento antes do termino previsto	Nao
+Inativa	Inativada manualmente pelo Coordenador	Nao
+
+6.3.2 Cadastro de Nova Turma
+Botao principal: + Nova Turma
+
+Campo	Obrigatorio	Observacoes
+Professor	Sim	Selecionado de lista de usuarios com perfil Professor
+Livro	Sim	Selecionado de lista de livros ativos
+Alunos	Nao*	Podem ser adicionados depois; turma pode ser criada vazia
+Dias da semana	Nao*	Definidos depois no Agendamento; permite multiplos dias
+Data de inicio	Nao*	Definida no Agendamento
+Horario	Nao*	Definido no Agendamento
+Sala	Nao	Opcional em qualquer momento
+Observacoes	Nao	Campo livre para anotacoes internas
+
+* Campos marcados como 'Nao*' sao opcionais no cadastro inicial mas necessarios para o agendamento.
+
+Comportamento ao criar a turma (status Em Espera)
+Status inicial: Em Espera.
+Nome provisorio gerado automaticamente: 'Turma [Livro] - EM ESPERA'. Ex: 'Turma Book 5 - EM ESPERA'.
+A turma aparece automaticamente na guia separada 'Turmas em Espera'.
+Enquanto em espera: datas das aulas, planejamento de capitulos e data prevista de termino exibidos como 'A definir'.
+Os calculos definitivos so ocorrem apos o Agendamento.
+
+6.3.3 Agendamento da Turma
+Na guia 'Turmas em Espera', cada turma exibe o botao 'Agendar Turma' (ou 'Definir Dia e Horario').
+
+Campo do Agendamento	Obrigatorio	Descricao
+Dia(s) da semana	Sim	Selecao multipla: ex, segunda + quarta. Cada dia salvo em turmas_dias_semana
+Data de inicio	Sim	Primeira data real de aula da turma
+Horario (inicio - fim)	Sim	Horario padrao das aulas; herdado em aulas.horario_inicio e horario_fim
+Sala	Nao	Sala fisica onde a turma ocorre
+
+Validacao no Agendamento	Descricao
+Conflito de horario do professor	Verifica se o professor ja tem outra turma no mesmo dia e horario
+Sobreposicao de turmas na sala	Verifica se a sala ja esta ocupada no horario solicitado
+Data de inicio valida	Nao pode ser no passado; deve ser um dos dias da semana selecionados
+
+Apos salvar o agendamento, o sistema executa automaticamente:
+11.	Status da turma muda para 'Em Andamento'.
+12.	Nome da turma e gerado definitivamente seguindo o padrao:
+Padrao de nomenclatura automatica da turma
+Formato: [LIVRO] (IDIOMA) [ABREV LIVRO] [CLASSIFICACAO] / [COD TURMA] [DIA SEMANA] [HORARIO]
+Exemplo 1: BOOK 5 (IDIOMA) B5 TEENS / 02 SEG 14:30
+Exemplo 2: BOOK 1 (IDIOMA) B1 ADULTS / 01 QUA 19:00
+O codigo da turma (ex: 02) e sequencial por livro dentro da escola.
+13.	Sistema gera automaticamente TODAS as aulas da turma:
+•	Para cada semana, cria uma aula em cada dia de turmas_dias_semana.
+•	Pula datas marcadas em calendario_geral com suspende_aula = true.
+•	Distribui os capitulos conforme qtd_aulas_previstas de cada capitulo.
+•	Calcula e grava a data prevista de termino em turmas.data_termino_prevista.
+
+6.3.4 Geracao Automatica de Aulas — Algoritmo
+Passo	Descricao
+1. Listar datas	A partir de data_inicio, listar todas as datas futuras que correspondem aos dias da semana da turma.
+2. Filtrar feriados	Remover datas que existem em calendario_geral com suspende_aula = true para esta escola.
+3. Distribuir capitulos	Pegar os capitulos do livro em ordem. Cada capitulo com qtd_aulas_previstas = N recebe N datas consecutivas.
+4. Criar registros	Para cada data valida, INSERT em aulas com: turma_id, capitulo_id, numero_aula, data_aula, horario_inicio, horario_fim, professor_id (da turma), status = 'Agendada'.
+5. Calcular termino	A ultima data gerada e gravada em turmas.data_termino_prevista.
+6. Inicializar progresso	INSERT em turmas_capitulos_progresso para cada capitulo do livro com concluido = false.
+
+6.3.5 Edicao de Turmas
+O sistema bloqueia edicao direta de campos estruturais em turmas que ja possuem aulas registradas, para preservar a integridade do historico academico.
+
+Campo	Editavel diretamente?	Condicao
+Livro	NAO	Requer remanejamento se turma tem aulas registradas
+Dias da semana / Horario	NAO	Requer remanejamento se turma tem aulas registradas
+Professor	SIM	Desde que nao cause conflito de horario; registra em log
+Sala	SIM	Desde que sala esteja disponivel no horario
+Observacoes	SIM	Sem restricao
+Adicionar/remover alunos	SIM	Enturmacao — pode ser feita a qualquer momento
+
+6.3.6 Remanejamento de Alunos
+Quando necessario alterar o livro ou horario de um grupo de alunos, o fluxo correto e o Remanejamento:
+14.	Inativacao da Turma Atual: turma origem marcada como Inativa. Data de encerramento registrada.
+15.	Criacao ou selecao de Nova Turma: nova turma criada seguindo as regras da Secao 6.3.2, ou selecao de turma ativa existente compativel.
+16.	Transferencia dos Alunos: sistema move os alunos selecionados para a nova turma, criando novos registros em matriculas.
+
+Regras de Remanejamento
+Historico preservado: notas, presenicas e ocorrencias do aluno na turma antiga ficam seladas e imutaveis.
+Novo ciclo: na nova turma, o aluno inicia novo diario de classe zerado.
+Historico Global: o Coordenador pode visualizar o Historico Global do Aluno, que consolida experiencias de todas as turmas.
+
+6.3.7 Inativacao de Turmas
+•	Botao 'Inativar Turma' disponivel nas opcoes da turma.
+•	Acao: apenas altera status para 'Inativo' no banco — nunca exclui registros.
+•	Turmas inativas: nao aparecem na agenda de professores; nao aceitam novos agendamentos; historico de aulas e registros e preservado integralmente.
+•	A inativacao e registrada em logs_auditoria.
+
+6.4 Livros (Books)
+Modulo de gestao do catalogo de livros/niveis utilizados nos cursos. Acesso pelo menu Books (somente Coordenador e Administrador).
+
+6.4.1 Tela de Livros
+Lista todos os livros cadastrados com seus capitulos. Acoes disponiveis: + Novo Livro, Editar Livro, Inativar Livro.
+
+6.4.2 Cadastro de Livro
+Campo	Obrigatorio	Descricao
+Nome do livro	Sim	Ex: Book 1 Teens, Book 7 Adults, Conversation Advanced
+Status	Sim	Ativo (padrao) ou Inativo
+
+6.4.3 Cadastro de Capitulos
+Dentro de cada livro, botao '+ Novo Capitulo'. Os capitulos definem a estrutura de aulas do livro.
+Campo	Obrigatorio	Descricao
+Nome do capitulo	Sim	Ex: Unit 1, Unit 2, Review 1-3, Final Test
+Quantidade de aulas previstas	Sim	Numero inteiro: quantas aulas este capitulo demanda. Ex: Unit 1 = 1 aula, Review = 2 aulas
+
+Exemplo de configuracao de livro
+Livro: Book 5 Teens
+Unit 1  ............  1 aula
+Unit 2  ............  1 aula
+Unit 3  ............  1 aula
+Review 1-3  .......  1 aula
+Unit 4  ............  1 aula
+...
+Final Test  .........  1 aula
+Total automatico: 16 aulas
+
+Regras dos Livros
+Nenhum livro pode ser excluido — apenas inativado.
+O total de aulas do livro e calculado automaticamente somando qtd_aulas_previstas de todos os capitulos.
+Alteracoes em capitulos (adicionar, editar qtd_aulas) impactam APENAS turmas que ainda nao foram agendadas ou geradas — turmas em andamento nao sao recalculadas automaticamente.
+Livros inativos nao aparecem na selecao ao criar novas turmas.
+
+ 
+6.5 Matriculas de Alunos
+Permite ao Coordenador realizar o cadastro completo de alunos e responsaveis. O modulo garante padronizacao dos dados, historico academico permanente e integracao com turmas e financeiro.
+
+Principio fundamental da Matricula
+O cadastro da matricula NAO cria automaticamente uma turma nem vincula o aluno a nenhuma turma.
+O aluno pode permanecer matriculado sem estar em nenhuma turma — fica disponivel para vinculacao posterior.
+Essa separacao garante flexibilidade para listas de espera, remanejamentos e alunos em pausa.
+
+6.5.1 Acesso ao Modulo
+Menu lateral: Secretaria > Matricula. Redireciona para a Listagem de Matriculas.
+
+6.5.2 Listagem de Matriculas
+Elemento da tela	Descricao
+Tabela principal	Nome do aluno, Turma atual, Status da matricula, Data de ingresso
+Botoes de acao por linha	Editar cadastro, Financeiro (abre modulo financeiro do aluno), Perfil do Aluno
+Busca	Por nome do aluno, nome do responsavel, CPF do aluno, CPF do responsavel
+Filtros	Por status da matricula (Ativo, Concluido, Trancado, Cancelado) e por status financeiro
+Status exibido	Status da matricula e indicador visual de status financeiro (em dia / inadimplente)
+
+6.5.3 Fluxo de Nova Matricula
+Botao: + Nova Matricula (acima da tabela)
+
+O fluxo e dividido em 5 etapas sequenciais, com barra de progresso no topo:
+
+Etapa 1 — Identificacao do Responsavel
+Campo	Obrigatorio	Regras
+Tipo de responsavel	Sim	Pessoa Fisica ou Pessoa Juridica
+CPF (Pessoa Fisica)	Sim	Validacao de CPF; se ja existir no sistema, sugere reaproveitar dados
+CNPJ (Pessoa Juridica)	Sim	Validacao de CNPJ
+•	Se CPF/CNPJ ja existir: sistema exibe os dados cadastrados e pergunta se deseja usar o responsavel existente ou criar novo.
+•	Botao 'Continuar' avanca para a Etapa 2.
+
+Etapa 2 — Dados Cadastrais do Responsavel
+Secao	Campos
+Dados Pessoais	Nome* | Sobrenome* | Grau de parentesco* | Sexo* | Cor/Raca | Estado civil | Data de nascimento | Escolaridade | Observacoes
+Nacionalidade	Nacionalidade | Data de entrada no pais
+Naturalidade	Estado | Cidade
+Telefones para Contato*	Tipo (Celular/Residencial/Comercial) | Numero | Marcar como principal
+Documento RG	Numero | Data de expedicao | Orgao expedidor
+Documento CPF*	Numero (preenchido automaticamente da Etapa 1)
+Endereco Residencial	CEP* | Tipo de logradouro* | Logradouro* | Numero | Complemento | Bairro* | Municipio*
+
+Regra Especial — Responsavel e o proprio aluno
+Exibir checkbox ou pergunta: 'O responsavel e o proprio aluno?'
+Se marcado: os dados do responsavel sao automaticamente espelhados no cadastro do aluno (Etapa 3), evitando duplicidade.
+O campo e_proprio_responsavel = true e gravado na tabela alunos.
+
+Etapa 3 — Dados Cadastrais do Aluno
+Secao	Campos
+Informacoes Gerais	Primeiro nome* | Sobrenome* | Sexo* | Cor/Raca* | Estado civil | Data de nascimento* | Data de ingresso* | Profissao | Registro escolar
+Telefones para Contato*	Tipo | Numero | Principal (mesmo modelo do responsavel)
+Endereco Residencial	Mesmo modelo do responsavel (CEP, logradouro, numero, complemento, bairro, municipio)
+Nacionalidade	Nacionalidade | Data de entrada no pais
+Naturalidade	Estado | Cidade
+Documento RG	Numero | Data de expedicao | Orgao expedidor
+Documento CPF*	Numero (unico por escola)
+
+Etapa 4 — Filiacao (Opcional)
+Cadastro opcional dos pais/responsaveis legais para fins de documentacao escolar. Pode conter mais de um registro.
+Campo	Obrigatorio	Descricao
+Tipo	Nao	Pai, Mae, Padrasto, Madrasta, Responsavel Legal, Outro
+Nome	Nao	Nome completo
+Data de nascimento	Nao	
+Naturalidade	Nao	Cidade/estado de nascimento
+Estado civil	Nao	
+Grau de instrucao	Nao	Fundamental, Medio, Superior, etc.
+E-mail	Nao	Para contato
+•	Botao 'Adicionar Filiacao 2' permite incluir segundo registro.
+
+Etapa 5 — Finalizacao da Matricula
+•	Botao 'Salvar Matricula': valida todos os campos obrigatorios antes de gravar.
+•	Botao 'Cancelar': descarta todo o fluxo e retorna a listagem.
+•	Apos salvar: matricula aparece na listagem; aluno disponivel para vinculacao a turmas e processos financeiros.
+
+6.5.4 Regras Gerais da Matricula
+Regra	Descricao
+Sem exclusao	Nenhuma matricula pode ser excluida — apenas inativada
+Status possiveis	Ativo, Concluido, Trancado, Cancelado
+CPF unico	CPF do aluno unico por escola (UNIQUE escola_id + cpf no banco)
+Historico permanente	Todos os dados ficam registrados para fins historicos e legais
+
+6.6 Arquivos de Turmas (Painel de Provas)
+Centraliza a gestao de materiais pedagogicos e avaliacoes de cada nivel. Permite ao Coordenador organizar, visualizar e disponibilizar arquivos oficiais de forma estruturada.
+
+6.6.1 Estrutura de Navegacao (Accordion)
+O painel utiliza uma hierarquia de pastas expansiveis:
+Nivel	Conteudo	Exemplo
+Nivel 1 — Livro	Listagem vertical de todos os livros ativos	Book 1, Book 2, Book 3...
+Nivel 2 — Agrupamento de Units	Ao expandir um livro, exibe grupos de unidades	Unit 1-3 | Unit 4-6 | Unit 7-9...
+Nivel 3 — Arquivos	Ao expandir o grupo, exibe os arquivos PDF/Doc anexados	Prova Unit 1-3.pdf, Gabarito.pdf
+•	Icone de seta indicativa para expansao/recolhimento de cada nivel.
+•	A lista de livros e sincronizada automaticamente com o modulo 6.4 (Livros).
+
+6.6.2 Acoes por Arquivo
+Acao	Quem pode	Descricao
+Imprimir	Coordenador, Administrador, Professor (somente leitura)	Abre o arquivo na funcao de impressao do navegador ou preview do PDF
+Editar (tres pontinhos)	Coordenador, Administrador	Substitui o arquivo atual por nova versao ou altera o nome de exibicao
+Excluir/Inativar (tres pontinhos)	Coordenador, Administrador	Marca o arquivo como Inativo — nunca exclui do servidor
+
+6.6.3 Regras de Upload
+•	Formatos suportados: PDF (prioritario — garante formatacao na impressao), .doc e .docx.
+•	Apenas Coordenador e Administrador podem fazer upload, editar ou excluir arquivos.
+•	O arquivo fisico e armazenado no servidor/storage; o banco guarda apenas a URL (arquivos_turma.url_storage) e metadados.
+•	Arquivos inativos nao aparecem na navegacao padrao, mas sao preservados no banco para historico.
+
+ 
+6.7 Gestao de Aulas de Reposicao
+O modulo de Reposicao permite criar, visualizar e gerenciar aulas de reposicao para alunos que tiveram faltas registradas. As reposicoes se integram completamente com o sistema de agenda, presenca e professor - aparecendo nos calendarios de todos os envolvidos e permitindo abater faltas anteriores do aluno.
+
+Perfil	Pode criar?	Pode editar?	Pode cancelar?	Pode visualizar?
+Coordenador	Sim	Sim	Sim	Sim - agenda global
+Administrador	Sim	Sim	Sim	Sim - agenda global
+Professor	Nao	Nao	Nao	Sim - apenas suas proprias reposicoes na agenda
+Financeiro	Nao	Nao	Nao	Nao
+
+Principio fundamental das Reposicoes
+Uma reposicao NUNCA substitui ou altera a aula original. Ela e um registro adicional e independente.
+Abordagem adotada: cada reposicao gera um registro na tabela aulas com tipo_aula = 'Reposicao'.
+Isso reutiliza toda a logica de agenda, chamada, card de aula e logs sem duplicar codigo.
+Reposicoes podem ser canceladas (soft delete via status), mas nunca excluidas fisicamente.
+
+6.7.1 Tela Principal - Lista de Reposicoes
+Tela exclusiva acessivel pelo menu lateral: 'Reposicoes'. Disponivel para Coordenador e Administrador.
+
+6.7.1.1 Layout da Tela
+Regiao	Conteudo
+Cabecalho da tela	Titulo 'Aulas de Reposicao' + botao primario '+ Nova Reposicao'
+Barra de filtros	Abas ou filtros rapidos: Proximas | Realizadas | Canceladas | Todas
+Tabela/lista principal	Cards ou linhas com as reposicoes filtradas
+Paginacao	Controle de paginas na parte inferior da lista
+
+6.7.1.2 Colunas da Tabela de Reposicoes
+Coluna	Origem no Banco	Descricao
+Aluno	alunos.nome + sobrenome	Nome completo do aluno
+Professor	usuarios.nome_completo	Professor responsavel pela reposicao
+Data	aulas.data_aula	Data da reposicao (formato DD/MM/YYYY)
+Horario	aulas.horario_inicio - horario_fim	Ex: 14:30 - 15:30
+Duracao	Calculado: horario_fim - horario_inicio	Ex: 1h, 1h30min
+Status	aulas.status	Agendada | Realizada | Cancelada
+Acoes	--	Icone de tres pontinhos: Editar, Cancelar
+
+6.7.1.3 Filtros Disponiveis
+Filtro	Criterio de exibicao
+Proximas	status = 'Agendada' E data_aula >= hoje
+Realizadas	status = 'Realizada'
+Canceladas	status = 'Cancelada'
+Todas	Sem filtro de status (paginado)
+Por professor	Dropdown para selecionar professor especifico
+Por aluno	Campo de busca por nome ou CPF do aluno
+Por periodo	Seletor de data inicio e data fim
+
+6.7.2 Criacao de Nova Reposicao - Fluxo Completo
+O fluxo de criacao e dividido em 3 etapas: (1) Preenchimento do formulario, (2) Tela de resumo com validacao de conflitos, (3) Confirmacao final e gravacao.
+
+6.7.2.1 Etapa 1 - Formulario de Nova Reposicao
+Campo	Obrigatorio	Tipo de input	Regras e observacoes
+Aluno	Sim	Autocomplete/search	Busca por nome, CPF ou turma. Apenas alunos com status Ativo.
+Professor	Sim	Dropdown	Lista de usuarios com perfil Professor e status Ativo.
+Data da reposicao	Sim	Date picker	Nao pode ser no passado. Formato DD/MM/YYYY.
+Horario de inicio	Sim	Time picker	Formato HH:MM. Gravado em UTC internamente.
+Horario de termino	Sim	Time picker	Deve ser posterior ao inicio. Duracao calculada automaticamente.
+Quantidade de horas	Calculado	Campo readonly	Calculado: horario_fim - horario_inicio. Ex: 1h, 1h30min.
+Observacoes	Nao	Textarea	Campo livre com motivo ou observacoes da reposicao.
+
+6.7.2.2 Funcionalidade de Repeticao
+Abaixo dos campos principais, uma secao opcional 'Repetir esta reposicao':
+Elemento	Tipo	Comportamento
+Checkbox 'Repetir esta reposicao'	Checkbox	Ao marcar, expande secao com campos de repeticao
+Quantidade de repeticoes	Numero inteiro (1-52)	Quantas vezes repetir alem da primeira. Ex: 3 = cria 4 no total.
+Intervalo de repeticao	Dropdown	Semanal (padrao) | Quinzenal | Mensal
+
+Regra de calculo das datas repetidas
+Semanal: cada reposicao subsequente cai exatamente 7 dias apos a anterior.
+  Exemplo: data base 10/04 + 3 repeticoes = 10/04, 17/04, 24/04, 01/05.
+Quinzenal: 14 dias de intervalo entre cada reposicao.
+Mensal: mesmo dia do mes seguinte (se dia inexistente no mes, usar ultimo dia).
+Horario, professor e aluno sao identicos em todas as reposicoes geradas.
+Datas em feriados/eventos com suspende_aula=true sao sinalizadas como CONFLITO DE CALENDARIO no resumo.
+
+Exemplo de repeticao semanal
+Aluno: Eduardo Fuck
+Professor: Lucas Ferreira
+Data base: 10/04/2026 (sexta-feira), 14:30 - 15:30
+Repeticoes: 3x, intervalo semanal
+Reposicoes geradas:
+  1. 10/04/2026 (Sex) 14:30 - 15:30  ->  OK
+  2. 17/04/2026 (Sex) 14:30 - 15:30  ->  OK
+  3. 24/04/2026 (Sex) 14:30 - 15:30  ->  CONFLITO: Feriado Tiradentes
+  4. 01/05/2026 (Sex) 14:30 - 15:30  ->  OK
+
+6.7.2.3 Etapa 2 - Tela de Resumo e Validacao de Conflitos
+Ao clicar em 'Criar', o sistema NAO salva imediatamente. Exibe tela de resumo com todas as reposicoes que serao criadas e resultado da validacao de conflitos.
+
+Regiao	Conteudo
+Titulo	'Confirmar Reposicoes - Revise antes de salvar'
+Contador	'X reposicoes serao criadas | Y com conflito'
+Lista de reposicoes	Cada reposicao em linha/card com status de conflito
+Botao Confirmar	Desabilitado enquanto houver qualquer conflito nao resolvido
+Botao Voltar	Retorna ao formulario para ajustes gerais
+
+Coluna no Resumo	Descricao
+#	Numero sequencial da reposicao (ex: 1 de 4)
+Data	Data da reposicao
+Horario	Inicio - Fim
+Aluno	Nome do aluno
+Professor	Nome do professor
+Status de conflito	OK (verde) | CONFLITO (vermelho com descricao do motivo)
+Acoes inline	Editar data/horario diretamente nesta tela | Remover esta reposicao
+
+6.7.2.4 Validacao de Conflitos - Regras Criticas
+Tipo de Conflito	Verificacao no Banco	Mensagem exibida ao usuario
+Professor com aula normal no horario	SELECT em aulas WHERE professor_id=X AND data_aula=D AND tipo_aula='Normal' AND sobreposicao de horario AND status!='Cancelada'	'Professor possui aula da turma [NOME] neste horario'
+Professor com outra reposicao no horario	SELECT em aulas WHERE professor_id=X AND data_aula=D AND tipo_aula='Reposicao' AND sobreposicao AND status!='Cancelada'	'Professor ja possui reposicao agendada neste horario'
+Sobreposicao parcial	Condicao: horario_inicio1 < horario_fim2 AND horario_fim1 > horario_inicio2	'Conflito parcial: sobreposicao de [X] minutos'
+Feriado/evento de calendario	SELECT em calendario_geral WHERE data=D AND escola_id=E AND suspende_aula=true	'Data marcada como [FERIADO/RECESSO] no calendario'
+
+Comportamento do sistema com conflitos
+Reposicoes com CONFLITO aparecem com fundo vermelho claro na tela de resumo.
+O botao 'Confirmar e Lancar Reposicoes' fica DESABILITADO enquanto houver ao menos 1 conflito de horario nao resolvido.
+O usuario pode: (a) editar data/horario diretamente na linha do resumo, (b) remover aquela reposicao especifica.
+Apos qualquer edicao inline, o sistema revalida automaticamente e atualiza o status da linha.
+Conflito de calendario (feriado) NAO bloqueia o botao - exige apenas confirmacao adicional do usuario.
+
+Exemplo visual da tela de resumo com conflito
+Confirmar Reposicoes - Revise antes de salvar
+4 reposicoes serao criadas | 1 com conflito
+
+#1 | 10/04/2026 | 14:30-15:30 | Eduardo Fuck | Lucas Ferreira | [OK]
+#2 | 17/04/2026 | 14:30-15:30 | Eduardo Fuck | Lucas Ferreira | [OK]
+#3 | 24/04/2026 | 14:30-15:30 | Eduardo Fuck | Lucas Ferreira | [CONFLITO]
+     Motivo: Data marcada como FERIADO (Tiradentes) no calendario.
+     >> [Editar horario/data]  [Remover esta reposicao]
+#4 | 01/05/2026 | 14:30-15:30 | Eduardo Fuck | Lucas Ferreira | [OK]
+
+[DESABILITADO: Confirmar e Lancar Reposicoes]  [Voltar]
+
+6.7.2.5 Etapa 3 - Confirmacao Final e Gravacao
+17.	Usuario clica em 'Confirmar e Lancar Reposicoes' (habilitado apenas sem conflitos bloqueantes).
+18.	Sistema executa INSERT em aulas para cada reposicao aprovada com tipo_aula = 'Reposicao'.
+19.	Sistema executa INSERT em reposicoes para cada registro, vinculando ao aula_id gerado.
+20.	Logs automaticos gerados via Audit.NET em logs_auditoria para cada registro criado.
+21.	Redirecionamento para a lista de reposicoes com mensagem: 'X reposicoes criadas com sucesso.'
+
+6.7.3 Edicao de Reposicao Existente
+Acessada pelo menu de tres pontinhos na lista, opcao 'Editar'.
+
+Campo	Editavel?	Condicao
+Data da reposicao	Sim	Apenas se status = 'Agendada'
+Horario de inicio / fim	Sim	Apenas se status = 'Agendada'; revalida conflitos apos edicao
+Professor	Sim	Apenas se status = 'Agendada'; revalida conflitos apos edicao
+Observacoes	Sim	Sem restricao de status
+Aluno	NAO	Campo informativo - nao alteravel apos criacao
+Status	Via acao 'Cancelar'	Nao editavel diretamente
+
+Revalidacao automatica na edicao
+Ao salvar qualquer edicao de data ou horario, o sistema reexecuta a validacao de conflitos.
+Se conflito encontrado: exibe mensagem de erro inline e impede o salvamento.
+Se sem conflito: salva e registra UPDATE em logs_auditoria via Audit.NET.
+
+6.7.4 Cancelamento de Reposicao
+•	Acao disponivel pelo menu de tres pontinhos: 'Cancelar Reposicao'.
+•	Comportamento: altera aulas.status para 'Cancelada' e reposicoes.status para 'Cancelada'. NUNCA exclui registros.
+•	Modal de confirmacao: 'Tem certeza que deseja cancelar esta reposicao? Esta acao nao pode ser desfeita.'
+•	Apos cancelamento: some da aba 'Proximas' e aparece na aba 'Canceladas'.
+•	Log automatico gerado em logs_auditoria via Audit.NET para ambas as tabelas afetadas.
+
+6.7.5 Integracao com a Agenda
+6.7.5.1 Diferenciacao Visual na Agenda
+Elemento visual	Aula Normal	Aula de Reposicao
+Cor do card	Cor padrao do professor (ex: verde claro)	Laranja claro ou borda de destaque diferente
+Etiqueta no card	Nenhuma (implicitamente 'aula')	Badge visivel: 'REPOSICAO'
+Conteudo do card	Nome da turma, alunos da turma, capitulo atual	Nome do aluno, professor, horario, badge 'REPOSICAO'
+Botao de acao	'Acessar Turma'	'Acessar Reposicao'
+
+6.7.5.2 Performance na Agenda com Reposicoes
+Sem impacto de performance - sem query adicional
+A query principal da agenda usa indice idx_aulas_escola_data (escola_id, data_aula, status).
+Reposicoes ja estao na tabela aulas com tipo_aula = 'Reposicao' - incluidas na mesma query.
+O frontend diferencia o card com base em: aulas.tipo_aula = 'Reposicao' -> badge laranja.
+Nenhum indice adicional necessario para a agenda - idx_aulas_escola_data ja cobre.
+
+6.7.6 Integracao com Controle de Presenca
+6.7.6.1 Chamada em Aula de Reposicao
+Aspecto	Aula Normal	Aula de Reposicao
+Alunos listados	Todos os alunos matriculados na turma	Apenas o(s) aluno(s) vinculado(s) a esta reposicao
+Status disponiveis	P, F, FJ, R	P, F, R
+Status padrao sugerido	Nenhum	R (pre-selecionado para confirmar ou alterar)
+Cabecalho da tela	Nome da turma, livro, sala	Badge 'REPOSICAO' + nome do aluno + data + professor
+
+6.7.6.2 Regra de Abatimento de Falta
+22.	Professor marca presenca como R (Reposicao) na chamada da aula de reposicao.
+23.	Sistema registra em presencas: status_presenca = 'R', aula_id = ID da aula de reposicao.
+24.	Sistema busca a ultima falta nao compensada do aluno na turma (status_presenca = 'F' sem reposicao vinculada).
+25.	Se encontrar: grava reposicao_de_presenca_id na presenca de reposicao apontando para a presenca de falta.
+26.	Percentual de frequencia do aluno e recalculado: faltas efetivas = (total F) - (total R vinculadas a F).
+
+Comportamento do abatimento de faltas
+A reposicao NAO apaga a falta original - o registro com status='F' permanece intacto.
+O calculo de frequencia usa: faltas nao compensadas = COUNT(F sem reposicao vinculada).
+Exemplo: aluno com 3 faltas e 1 reposicao realizada = 2 faltas efetivas na frequencia.
+O historico exibe ambos: a falta original e a reposicao que a compensou, com rastreabilidade completa.
+
+6.7.7 Regras de Negocio Consolidadas
+Regra	Descricao
+Sem exclusao fisica	Reposicoes nunca sao deletadas - apenas canceladas (status = 'Cancelada')
+Independencia da aula original	Uma reposicao e registro novo e independente - nao altera a aula original
+Multi-tenant	escola_id obrigatorio em todos os registros de reposicao
+Fusos horarios	Horarios gravados em UTC - exibidos no fuso local pelo frontend
+Conflito bloqueia gravacao	Impossivel confirmar enquanto houver conflito de horario do professor
+Log obrigatorio	Toda criacao, edicao e cancelamento gera log automatico via Audit.NET
+Edicao so em Agendadas	Apenas reposicoes com status 'Agendada' podem ter data/horario/professor editados
+Reposicao como aula	Cada reposicao gera registro em aulas com tipo_aula='Reposicao', aproveitando infraestrutura existente
+
+6.7.8 Impacto no Banco de Dados
+6.7.8.1 Alteracao na Tabela aulas - Campo tipo_aula
+Novo campo: aulas.tipo_aula
+Tipo: ENUM('Normal', 'Reposicao') NOT NULL DEFAULT 'Normal'
+Todas as aulas geradas pelo sistema de turmas: tipo_aula = 'Normal'.
+Aulas criadas pelo modulo de Reposicao: tipo_aula = 'Reposicao'.
+Permite diferenciar os dois tipos na agenda, na chamada e em relatorios.
+ALTER TABLE aulas ADD COLUMN tipo_aula ENUM('Normal','Reposicao') NOT NULL DEFAULT 'Normal' AFTER status;
+
+6.7.8.2 Nova Tabela: reposicoes
+Campo	Tipo	Nulo	Descricao
+id	INT AUTO_INCREMENT PK	NAO	Identificador unico
+escola_id	INT FK escolas	NAO	Isolamento multi-tenant
+aluno_id	INT FK alunos	NAO	Aluno que realizara a reposicao
+professor_id	INT FK usuarios	NAO	Professor responsavel
+aula_id	INT FK aulas	NAO	Registro correspondente em aulas (tipo_aula='Reposicao')
+data_reposicao	DATE	NAO	Data da reposicao (facilita queries diretas)
+horario_inicio	TIME	NAO	Hora de inicio (UTC)
+horario_fim	TIME	NAO	Hora de termino (UTC)
+quantidade_horas	DECIMAL(4,2)	NAO	Duracao calculada. Ex: 1.50 = 1h30min
+status	ENUM('Agendada','Realizada','Cancelada')	NAO	Status atual - espelha aulas.status
+observacoes	TEXT	SIM	Motivo ou observacoes da reposicao
+criado_por_usuario_id	INT FK usuarios	NAO	Quem criou (Coordenador/Admin)
+data_criacao	DATETIME	NAO	Timestamp UTC de criacao
+data_atualizacao	DATETIME	NAO	ON UPDATE CURRENT_TIMESTAMP
+
+Script SQL: CREATE TABLE reposicoes
+CREATE TABLE reposicoes (
+    id                    INT AUTO_INCREMENT PRIMARY KEY,
+    escola_id             INT NOT NULL,
+    aluno_id              INT NOT NULL,
+    professor_id          INT NOT NULL,
+    aula_id               INT NOT NULL,
+    data_reposicao        DATE NOT NULL,
+    horario_inicio        TIME NOT NULL,
+    horario_fim           TIME NOT NULL,
+    quantidade_horas      DECIMAL(4,2) NOT NULL,
+    status                ENUM('Agendada','Realizada','Cancelada') DEFAULT 'Agendada',
+    observacoes           TEXT,
+    criado_por_usuario_id INT NOT NULL,
+    data_criacao          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    data_atualizacao      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (escola_id)             REFERENCES escolas(id),
+    FOREIGN KEY (aluno_id)              REFERENCES alunos(id),
+    FOREIGN KEY (professor_id)          REFERENCES usuarios(id),
+    FOREIGN KEY (aula_id)               REFERENCES aulas(id),
+    FOREIGN KEY (criado_por_usuario_id) REFERENCES usuarios(id)
+);
+
+6.7.8.3 Alteracao na Tabela presencas - Campo reposicao_de_presenca_id
+Novo campo: presencas.reposicao_de_presenca_id
+Tipo: INT (nullable) - self-referencing FK para presencas(id)
+Quando o professor marca R em reposicao, o sistema vincula a uma presenca anterior de falta (status=F).
+Permite rastrear precisamente: qual reposicao compensou qual falta.
+Nullable - nem toda reposicao precisa estar vinculada a uma falta especifica.
+ALTER TABLE presencas ADD COLUMN reposicao_de_presenca_id INT DEFAULT NULL;
+ALTER TABLE presencas ADD FOREIGN KEY (reposicao_de_presenca_id) REFERENCES presencas(id);
+
+6.7.8.4 Indices de Performance para Reposicoes
+Nome do Indice	Tabela e Colunas	Query otimizada
+idx_reposicoes_escola_data	reposicoes(escola_id, data_reposicao, status)	Lista de reposicoes por escola, data e status
+idx_reposicoes_professor	reposicoes(escola_id, professor_id, data_reposicao)	Verificacao de conflito de horario do professor
+idx_reposicoes_aluno	reposicoes(escola_id, aluno_id, status)	Historico de reposicoes de um aluno especifico
+idx_aulas_tipo	aulas(escola_id, tipo_aula, data_aula)	Filtrar apenas reposicoes na agenda
+
+6.7.9 Auditoria - Eventos Gerados
+Evento	Acao em logs_auditoria	Campos relevantes em dados_novos
+Criacao de reposicao	INSERT - tabela_afetada='reposicoes'	aluno_id, professor_id, data, horario, status='Agendada', criado_por
+Criacao da aula vinculada	INSERT - tabela_afetada='aulas'	tipo_aula='Reposicao', data_aula, horario_inicio, horario_fim
+Edicao de data/horario	UPDATE - tabela_afetada='reposicoes'	dados_anteriores: horario antigo; dados_novos: horario novo
+Cancelamento	UPDATE - tabela_afetada='reposicoes'	status: 'Agendada' -> 'Cancelada'
+Cancelamento da aula vinculada	UPDATE - tabela_afetada='aulas'	status: 'Agendada' -> 'Cancelada'
+Presenca marcada em reposicao	INSERT - tabela_afetada='presencas'	aula_id, aluno_id, status_presenca='R', reposicao_de_presenca_id
+Reposicao realizada	UPDATE - tabela_afetada='reposicoes'	status: 'Agendada' -> 'Realizada'
+
+Rastreabilidade completa do ciclo de vida
+Consultando logs_auditoria com tabela_afetada='reposicoes' AND registro_id=X e possivel reconstruir:
+1. Quando foi criada, por quem, para qual aluno e professor.
+2. Se editada: quais campos mudaram, quando e por quem.
+3. Se cancelada: quando e por quem.
+4. Se realizada: quando a presenca foi lancada e se abateu alguma falta.
+Indice idx_logs_registro (tabela_afetada, registro_id) garante performance nessa consulta.
+
+6.7.10 Resumo das Mudancas no Banco para este Modulo
+Objeto	Tipo de mudanca	Descricao
+aulas.tipo_aula	Novo campo	ENUM('Normal','Reposicao') DEFAULT 'Normal'
+reposicoes	Nova tabela	Metadados das reposicoes + vinculo com aulas
+presencas.reposicao_de_presenca_id	Novo campo	INT nullable - vincula reposicao a falta compensada
+idx_reposicoes_escola_data	Novo indice	reposicoes(escola_id, data_reposicao, status)
+idx_reposicoes_professor	Novo indice	reposicoes(escola_id, professor_id, data_reposicao)
+idx_reposicoes_aluno	Novo indice	reposicoes(escola_id, aluno_id, status)
+idx_aulas_tipo	Novo indice	aulas(escola_id, tipo_aula, data_aula)
+
+ 
+7. Modulo Financeiro
+Gerencia as parcelas financeiras dos alunos, historico de pagamentos, estornos e rastreabilidade completa de todas as movimentacoes. O acesso e pelo perfil Financeiro ou Administrador.
+
+7.1 Acesso ao Financeiro do Aluno
+O financeiro de um aluno especifico e acessado a partir da Listagem de Matriculas (Secao 6.5.2), clicando no botao 'Financeiro' da linha do aluno.
+
+7.1.1 Cabecalho da Tela Financeira
+No topo da tela, exibido em painel fixo para referencia:
+Informacao	Descricao
+Nome do aluno	Nome completo
+Book Atual	Livro que o aluno esta cursando no momento
+Data de ingresso no curso	Data de ingresso na matricula atual
+Data de termino do Book Atual	Data prevista de termino da turma ativa
+Professor Atual	Professor da turma ativa
+
+Exemplo de cabecalho financeiro
+Aluno(a):  RONALD XAVIER DE ABREU
+Data de ingresso no curso:  01/02/2023
+Data termino Book Atual:  02/05/2024
+Professor Atual:  Narjara Gomes
+
+Botoes de acao no cabecalho:
+•	Nova Parcela: abre formulario de criacao de parcela.
+•	Opcoes das Parcelas Selecionadas (ativo quando uma ou mais parcelas estao selecionadas):
+•	   — Criar Carne Escolar: gera documento com as parcelas selecionadas para impressao.
+•	   — Baixa de Parcela: marca multiplas parcelas como pagas de uma vez.
+
+7.1.2 Lista de Parcelas
+Abaixo do cabecalho, tabela com todas as parcelas do aluno:
+Coluna	Descricao
+Checkbox de selecao	Permite selecionar multiplas parcelas para acoes em lote
+Turma	Nome da turma a qual a parcela esta vinculada
+Tipo	Ex: Book 1, Mensalidade, Material Didatico
+Vencimento	Data de vencimento da parcela (DD/MM/YYYY)
+Aluno	Nome do aluno (util na visao global)
+Valor	Valor original da parcela (R$)
+Valor Pago	Valor efetivamente pago (R$); vazio se pendente
+Valor Devido	Diferenca entre Valor e Valor Pago
+Data Ultima Modificacao	Ultima alteracao realizada na parcela
+Tres pontinhos	Menu de opcoes: Editar, Inativar Parcela, Recibo de Pagamento
+
+7.1.3 Codigo de Cores das Linhas
+Situacao	Cor da linha	Criterio
+Nao vencida / Pendente	Branca (padrao)	data_vencimento > hoje E status = 'Pendente'
+Paga	Verde	status = 'Pago'
+Vencida	Vermelha	data_vencimento < hoje E status = 'Pendente' ou 'Vencido'
+Estornada	Cinza claro	status = 'Estornado'
+
+7.1.4 Opcoes pelo Menu de Tres Pontinhos
+•	Editar: abre a tela de edicao detalhada da parcela (Secao 7.2).
+•	Inativar Parcela: marca status = 'Cancelado'; parcela some da listagem padrao mas permanece no banco.
+•	Recibo de Pagamento: gera e abre PDF de recibo da parcela paga.
+
+7.2 Tela de Nova Parcela
+Ao clicar em 'Nova Parcela', o formulario e exibido com os seguintes campos:
+Campo	Obrigatorio	Descricao
+Tipo	Sim	Ex: Book 1, Mensalidade, Material Didatico, Taxa de Matricula — vinculado a categorias_financeiras
+Data de Vencimento	Sim	Data limite para pagamento
+Aluno	Sim	Preenchido automaticamente (contexto do aluno)
+Responsavel	Sim	Responsavel financeiro (da tabela responsaveis)
+Turma	Sim	Turma a qual a parcela se refere
+Descricao	Sim	Texto descritivo. Ex: 'Parcela de Vcto 10/08/2024 - (00078) Alice Massari...'
+Mes de Competencia	Sim	Formato YYYY-MM. Ex: 07/2024 para agosto
+Valor Original	Sim	Valor bruto sem desconto (R$)
+Percentual de Desconto	Nao	Percentual de desconto aplicado (%)
+Valor com Desconto	Calculado	Valor Original - (Valor Original * Percentual de Desconto / 100)
+Forma de Pagamento	Nao	PIX, Boleto, Cartao, Dinheiro, etc.
+Conta Destino	Nao	Conta bancaria que vai receber o valor (de contas_bancarias)
+
+7.3 Tela de Edicao de Parcela
+Acessada pelo botao 'Editar' no menu de tres pontinhos. Exibe visao detalhada da parcela e permite edicao controlada.
+
+7.3.1 Resumo da Parcela (Parte Superior)
+Todos os campos da parcela sao exibidos preenchidos. Os campos editaveis sao identificados com icone de caneta ao lado.
+Campo	Editavel?	Condicao para edicao
+Tipo	Sim	Desde que parcela nao esteja Estornada
+Data de Vencimento	Sim	Desde que parcela nao esteja Estornada
+Mes de Competencia	Sim	Desde que parcela nao esteja Estornada
+Valor Original	Sim	Registra log automatico ao alterar
+Percentual de Desconto	Sim	Recalcula Valor com Desconto automaticamente; registra log
+Valor com Desconto	Calculado	Nao editavel diretamente — resultado do calculo
+Tipo de Operacao	Sim	Ex: Carne Escolar, Avulso
+Aluno	NAO	Campo informativo
+Responsavel	NAO	Campo informativo
+Turma	NAO	Campo informativo
+Unidade/Escola	NAO	Campo informativo
+
+Exemplo de exibicao da parcela editavel
+Tipo: [MENSALIDADE ✏]       Data de vencimento: [10/08/2024 ✏]
+Aluno: ALICE MASSARI TOMAZ LOPES DO NASCIMENTO SOARES
+Responsavel: TULLAINE MASSARI TOMAZ LOPES DO NASCIMENTO
+Turma: BOOK 5 (IDIOMA) BOOK 5 TEENS / 08 QUA 14:30
+Descricao: PARCELA DE VCTO 10/08/2024 - (00078) Alice Massari...
+Mes de competencia: [07/2024 ✏]
+Valor Original: [R$290,00 ✏]       Valor com Desconto: R$250,00
+Tipo de operacao: [CARNE ESCOLAR ✏]     Unidade: CWB IDIOMAS
+
+7.3.2 Historico de Movimentacoes (Parte Inferior)
+Secao de auditoria da parcela — registro cronologico de todas as acoes realizadas.
+Coluna	Descricao
+DT Lancamento	Data e hora em que o registro foi criado no sistema
+DT Pagamento	Data em que o pagamento foi realizado (pode diferir da data de lancamento)
+Usuario	Nome do usuario que realizou a acao
+Acao Realizada	Ex: Previsao de Recebimento, Realizacao do Recebimento, Estorno, Alteracao de Valor
+Valor	Valor da movimentacao com identificacao (ex: STONE (0001 | 1492817-7): R$250,00)
+
+Exemplo real de historico de movimentacoes
+16/07/2024 17:08:14 | — | DIEGO MAEDA FAQUINELLO | PREVISAO DO RECEBIMENTO | MENSALIDADE: R$250,00 | DESCONTO MENSALIDADE: R$290,00
+02/02/2026 10:28:42 | 10/08/2024 | MATHEUS PUPIA | REALIZACAO DO RECEBIMENTO | STONE (0001|1492817-7): R$250,00 [ESTORNADO]
+>>> LANCAMENTO ESTORNADO POR GABRIELLI PUPIA EM 03/02/2026. MOTIVO: DATA DE PAGAMENTO INCORRETA.
+03/02/2026 11:49:53 | 10/08/2024 | GABRIELLI PUPIA | REALIZACAO DO RECEBIMENTO | STONE (0001|1492817-7): R$250,00 [E]
+
+Regra de destaque visual do estorno
+Registros estornados devem aparecer com texto tachado (strikethrough) na coluna de Valor.
+Abaixo do registro estornado, uma linha destacada em negrito deve informar: quem estornou, quando e o motivo.
+
+7.4 Regras de Negocio Financeiro
+7.4.1 Integridade no Pagamento de Parcelas
+Para alterar o status de uma parcela para 'Pago', os seguintes campos sao OBRIGATORIOS:
+•	Data de Pagamento: data real em que o pagamento foi recebido.
+•	Valor Pago: valor efetivamente recebido (nao pode ser negativo; nao deve exceder limites configurados).
+•	Forma de Pagamento: PIX, Boleto, Cartao, Dinheiro, etc.
+
+7.4.2 Tratamento de Estorno
+•	Parcelas com status 'Estornado' ficam completamente bloqueadas para edicao.
+•	Permitem apenas visualizacao das informacoes e do historico.
+•	Para novo registro referente a parcela estornada: criar nova parcela ou novo recebimento — nunca alterar o registro existente.
+•	No banco: o estorno e registrado como nova movimentacao do tipo 'Estorno' em movimentacoes_financeiras — o registro original nunca e alterado.
+
+7.4.3 Rastreabilidade — Log de Alteracoes (parcelas_historico)
+Qualquer modificacao nos campos abaixo dispara automaticamente a criacao de um registro em parcelas_historico:
+Campo alterado	Registra no historico?	Conteudo gravado
+Valor Original	Sim	Valor anterior, valor novo, data/hora, usuario
+Percentual de Desconto	Sim	Percentual anterior, novo percentual
+Valor com Desconto	Sim	Calculado automaticamente
+Valor Pago	Sim	Valor anterior, valor novo
+Data de Pagamento	Sim	Data anterior, nova data
+Status da parcela	Sim	Status anterior, novo status
+Forma de Pagamento	Sim	Forma anterior, nova forma
+
+Imutabilidade do historico financeiro
+Registros em parcelas_historico NUNCA podem ser alterados ou excluidos.
+O campo data_ultima_modificacao na tabela parcelas e atualizado automaticamente a cada alteracao.
+E vedada a sobrescrita de qualquer informacao sem o devido registro historico.
+O Audit.NET captura adicionalmente todas as alteracoes em logs_auditoria para rastreabilidade total.
+
+ 
+8. Modelo de Banco de Dados
+O banco de dados utiliza MySQL 8+ com charset utf8mb4 e collation utf8mb4_unicode_ci. Todos os campos de data/hora sao DATETIME (gravados em UTC). Todos os valores de ENUM utilizam texto sem acentuacao para evitar erros de encoding.
+
+Configuracao obrigatoria de conexao
+Toda conexao com o banco DEVE incluir no inicio da sessao:
+   SET NAMES utf8mb4;
+   SET CHARACTER SET utf8mb4;
+Isso garante suporte correto a caracteres especiais em todo o trafego entre a aplicacao e o banco.
+
+8.1 Visao Geral das Tabelas
+Tabela	Modulo	Descricao	Obs
+escolas	Multi-tenant	Cadastro de escolas — raiz de todos os registros	Unica sem escola_id FK
+perfis	Acesso	Perfis de acesso por escola	
+usuarios	Acesso	Usuarios do sistema; email unico por escola	Senha com hash
+livros	Curriculo	Catalogo de livros/cursos	Nao excluir
+capitulos	Curriculo	Capitulos e qtd de aulas por livro	Define distribuicao de aulas
+responsaveis	Pessoas	Responsaveis financeiros dos alunos	CPF/CNPJ unico por escola
+contatos_telefone	Pessoas	Telefones de alunos e responsaveis	Polimorfismo — sem FK real
+alunos	Pessoas	Cadastro de alunos	CPF unico por escola
+filiacoes	Pessoas	Dados de filiacao do aluno	Opcional, multiplos registros
+turmas	Turmas	Turmas de aula com professor e livro	1 professor por turma
+turmas_dias_semana	Turmas	Dias da semana de cada turma (NOVO)	0=Dom...6=Sab; 1 reg por dia
+matriculas	Turmas	Vinculo aluno-turma	Status por matricula
+aulas	Aulas	Aulas geradas automaticamente	Com horario, professor e conteudo
+turmas_capitulos_progresso	Aulas	Progresso de capitulos por turma (NOVO)	Marcado pelo professor
+presencas	Aulas	Chamada por aula e aluno	P, F, FJ, R; UNIQUE aula+aluno
+homeworks	Aulas	Notas de homework por aula	UNIQUE aula+aluno
+avaliacoes	Aulas	5 avaliacoes fixas por turma	UNIQUE turma+aluno+tipo
+ocorrencias	Aulas	Ocorrencias academicas e administrativas	Academica=professor; Admin=coord
+calendario_geral	Calendario	Feriados e eventos do calendario letivo	suspende_aula controla geracao
+arquivos_turma	Arquivos	Materiais e provas por capitulo	URL no storage; inativar, nunca deletar
+contas_bancarias	Financeiro	Contas bancarias da escola	
+categorias_financeiras	Financeiro	Categorias de receita e despesa	
+parcelas	Financeiro	Parcelas financeiras dos alunos	
+parcelas_historico	Financeiro	Historico imutavel de alteracoes de parcelas	NUNCA deletar
+movimentacoes_financeiras	Financeiro	Movimentacoes financeiras	NUNCA alterar registros existentes
+logs_auditoria	Auditoria	Log completo de todas as acoes do sistema	Audit.NET + EF interceptor
+pre_alunos	Comercial	Fichas de interessados antes da matricula formal	Funil comercial
+contratos_templates	Comercial	Versoes do template de contrato da escola	Ativo = template em uso
+contratos_gerados	Comercial	Contratos gerados com variaveis substituidas	Conteudo imutavel apos geracao
+permissoes	Acesso	Catalogo de policies do sistema	Ex: CRIAR_PRE_ALUNO
+usuario_permissoes	Acesso	Permissoes especificas por usuario	Configurado pelo Admin
+perfil_permissoes	Acesso	Permissoes padrao por perfil (opcional)	Pre-popula usuario_permissoes
+
+8.2 Detalhamento das Tabelas Novas (v3)
+8.2.1 turmas_dias_semana
+Finalidade e estrutura
+Armazena os dias da semana em que cada turma tem aula como valores inteiros.
+Representacao: 0=Domingo, 1=Segunda, 2=Terca, 3=Quarta, 4=Quinta, 5=Sexta, 6=Sabado (padrao JS/Python).
+Uma turma que tem aula segunda e quarta tem 2 registros: dia_semana=1 e dia_semana=3.
+Permite geracao automatica de aulas, calculo de data de termino e filtragem por dia na agenda.
+Restrição: UNIQUE (turma_id, dia_semana) — nao pode duplicar o mesmo dia para a mesma turma.
+Indice: idx_turmas_dias_semana (turma_id, dia_semana).
+
+8.2.2 turmas_capitulos_progresso
+Finalidade e estrutura
+Registra o status de conclusao de cada capitulo DENTRO DO CONTEXTO de cada turma.
+O mesmo capitulo pode ter concluido=false em uma turma e concluido=true em outra simultaneamente.
+Campos: escola_id, turma_id, capitulo_id, concluido BOOLEAN (padrao false), data_conclusao DATE.
+Unicidade: UNIQUE (turma_id, capitulo_id) — um registro por capitulo por turma.
+Populado automaticamente na geracao das aulas (um registro por capitulo, todos com concluido=false).
+Atualizado quando o professor marca o capitulo como concluido na tela de chamada.
+Indice: idx_capitulos_progresso (turma_id, concluido).
+
+8.3 Campos Adicionados em Tabelas Existentes (v3)
+8.3.1 Tabela aulas — Campos novos
+Campo	Tipo	Obrigatorio	Descricao
+professor_id	INT (FK usuarios)	Nao	Professor que ministrou esta aula especifica. Herdado de turmas.professor_id na geracao; editavel para substituicoes pontuais.
+horario_inicio	TIME	Sim	Hora de inicio da aula. Herdado de turmas.horario na geracao; editavel por aula.
+horario_fim	TIME	Sim	Hora de termino da aula. Calculado com base no horario e duracao da aula.
+conteudo_dado	VARCHAR(200)	Nao	Conteudo registrado pelo professor na chamada. Ex: 'Unit 15', 'Review 1-3', 'Listening p.42'.
+
+8.3.2 Tabela logs_auditoria — Alteracoes (v3)
+Campo	Antes (v1/v2)	Agora (v3)	Motivo da alteracao
+usuario_id	INT NOT NULL	INT (nullable)	Suporta operacoes de sistema (jobs, schedulers) sem usuario logado
+usuario_nome	(nao existia)	VARCHAR(150)	Nome do usuario gravado no momento da acao; preservado mesmo se usuario for inativado depois
+acao	ENUM restrito	VARCHAR(30)	Suporta todos os valores do Audit.NET: INSERT, UPDATE, DELETE, LOGIN, LOGOUT, RESTORE, etc.
+
+8.4 Indices de Performance
+Todos os indices foram criados para cobrir as queries mais criticas do sistema, sempre iniciando com escola_id (multi-tenant).
+Nome do Indice	Tabela e Colunas	Query que otimiza	Versao
+idx_turmas_professor	turmas(escola_id, professor_id, status)	Tela inicial do professor — busca turmas do professor logado	v1
+idx_aulas_turma_data	aulas(turma_id, data_aula)	Aulas de uma turma ordenadas por data — tela de gerenciamento	v1
+idx_aulas_escola_data	aulas(escola_id, data_aula, status)	QUERY PRINCIPAL DA AGENDA — todas as aulas de um dia para a escola	v3 NOVO
+idx_presencas_aula	presencas(aula_id, aluno_id)	Chamada de uma aula especifica	v1
+idx_presencas_aluno	presencas(aluno_id, status_presenca)	Calculo de frequencia e faltas por aluno	v1
+idx_parcelas_vencimento	parcelas(escola_id, status, data_vencimento)	Financeiro: parcelas vencidas, a vencer, por status	v1
+idx_matriculas_turma	matriculas(turma_id, status)	Alunos ativos de uma turma	v1
+idx_logs_data	logs_auditoria(escola_id, usuario_id, data_hora)	Logs por usuario e periodo	v1
+idx_logs_tabela	logs_auditoria(escola_id, tabela_afetada, data_hora)	Logs filtrados por tabela (ex: todos os logs de parcelas)	v3 NOVO
+idx_logs_registro	logs_auditoria(tabela_afetada, registro_id)	Historico de um registro especifico (ex: aluno id=42)	v3 NOVO
+idx_alunos_escola	alunos(escola_id, status)	Busca de alunos por escola	v1
+idx_turmas_dias_semana	turmas_dias_semana(turma_id, dia_semana)	Geracao automatica de aulas por dia da semana	v3 NOVO
+idx_capitulos_progresso	turmas_capitulos_progresso(turma_id, concluido)	Capitulos pendentes de conclusao por turma	v3 NOVO
+
+8.5 Auditoria — Implementacao com Audit.NET
+8.5.1 Visao Geral
+O sistema utiliza Audit.NET integrado ao Entity Framework Core para capturar automaticamente TODAS as operacoes de escrita no banco, sem necessidade de codigo manual em cada service ou repository.
+
+8.5.2 Fluxo de Captura
+27.	O DbContext do EF intercepta o metodo SaveChanges antes de qualquer INSERT, UPDATE ou DELETE.
+28.	O Audit.NET inspeciona o ChangeTracker e identifica todas as entidades modificadas.
+29.	Para cada entidade: captura tipo de acao, tabela afetada, ID do registro, dados anteriores (JSON) e dados novos (JSON).
+30.	Injeta escola_id, usuario_id e usuario_nome do contexto do usuario logado (JWT).
+31.	Grava o registro em logs_auditoria atomicamente com a operacao principal.
+
+8.5.3 Estrutura do Log
+Campo em logs_auditoria	Origem	Exemplo
+escola_id	JWT do usuario logado	1
+usuario_id	JWT do usuario logado	42 (ou NULL para jobs de sistema)
+usuario_nome	Servico de contexto — nome no momento da acao	'Lucas Ferreira'
+tabela_afetada	Audit.NET — nome da entidade EF	'parcelas'
+registro_id	Audit.NET — PK do registro	'1587'
+acao	Audit.NET — tipo da operacao	'UPDATE'
+dados_anteriores	Audit.NET — valores antes da alteracao	'{"status":"Pendente","valor_pago":null}'
+dados_novos	Audit.NET — valores apos a alteracao	'{"status":"Pago","valor_pago":250.00}'
+data_hora	DateTime.UtcNow no momento da captura	'2026-03-19T14:32:11Z'
+
+8.6 Decisoes de Design e Boas Praticas
+Topico	Decisao adotada	Justificativa
+Exclusao de dados	Soft delete — status = 'Inativo'	Preservar historico, rastreabilidade e conformidade legal
+Fuso horario	DATETIME + gravacao em UTC	Evitar inconsistencias entre escolas em fusos diferentes
+Charset e ENUMs	utf8mb4; valores ENUM sem acentuacao	Prevenir erros de encoding MySQL em ENUMs
+Multi-tenancy	escola_id em TODAS as tabelas	Isolamento total de dados entre escolas na mesma instancia
+FK comportamento	ON DELETE RESTRICT (padrao MySQL)	Impede exclusao acidental de registros com dependentes
+Polimorfismo em contatos_telefone	Integridade gerenciada pelo back-end	MySQL nao suporta FK em colunas polimorficas
+Audit log — campo acao	VARCHAR(30) ao inves de ENUM	Compatibilidade com todos os valores gerados pelo Audit.NET
+Historico de parcelas	Tabela parcelas_historico imutavel separada	Rastreabilidade financeira auditavel independente do log geral
+Movimentacoes financeiras	Registros imutaveis — estorno cria nova linha	Integridade do fluxo de caixa — nenhuma movimentacao e apagada
+Progresso de capitulos	Tabela separada por turma	Mesmo capitulo em estados diferentes em turmas distintas
+Dias da semana	Inteiro 0-6 em tabela separada	Permite queries programaticas para geracao automatica de aulas
+Horario por aula	TIME em aulas (nao so em turmas)	Permite reagendamento pontual de aulas sem alterar a turma
+Autorizacao	Policy-Based com claims JWT	Permissoes granulares por usuario; sem necessidade de deploy para ajustar acesso
+Pre-Aluno separado do Aluno	Tabela pre_alunos independente	Preserva funil comercial sem poluir dados academicos
+Contrato como template+gerado	Duas tabelas separadas	Template editavel; conteudo gerado e imutavel (preserva o que foi assinado)
+Super Admin sem escola_id	Perfil especial sem vinculo a escola	Isola gestao de escolas de dados academicos/financeiros
+Login com codigo da escola	Campo adicional no login	Isola autenticacao por escola sem expor estrutura interna
+
+ 
+9. Modulo Comercial — Pre-Aluno e Contratos
+O Modulo Comercial e o ponto de entrada do ciclo de vida de um aluno no sistema. O perfil Comercial e responsavel por captar interessados, registrar fichas de pre-aluno e gerar contratos automaticamente. Somente apos a aprovacao e finalizacao da matricula (pelo perfil Secretaria) o pre-aluno se torna um aluno efetivo no sistema.
+
+Separacao entre Pre-Aluno e Aluno
+Pre-Aluno: registro criado pelo Comercial. Contem dados basicos, tipo de contrato, forma de pagamento e observacoes comerciais. NAO aparece nas turmas nem na agenda.
+Aluno: criado pela Secretaria ao finalizar e aprovar a matricula, a partir dos dados do pre-aluno.
+Essa separacao preserva o fluxo comercial sem poluir o sistema academico com registros nao confirmados.
+
+9.1 Perfil Comercial — Permissoes e Acesso
+Permissao (Policy)	Descricao	Perfil
+CRIAR_PRE_ALUNO	Criar e editar fichas de pre-aluno	Comercial, Administrador
+VISUALIZAR_PRE_ALUNO	Ver lista e detalhes de pre-alunos	Comercial, Secretaria, Coordenador, Administrador
+GERAR_CONTRATO	Gerar contrato a partir do template e dados do pre-aluno	Comercial, Administrador
+VISUALIZAR_CONTRATO	Visualizar contratos gerados	Comercial, Secretaria, Coordenador, Administrador
+EDITAR_TEMPLATE_CONTRATO	Editar o modelo base de contrato da escola	Coordenador, Administrador
+FINALIZAR_MATRICULA	Converter pre-aluno em aluno e criar matricula formal	Secretaria, Administrador
+APROVAR_MATRICULA	Aprovar matricula antes da finalizacao	Secretaria, Administrador
+
+9.2 Tela de Pre-Alunos
+Acessada pelo menu 'Comercial > Pre-Alunos'. Disponivel para os perfis Comercial, Secretaria e Administrador.
+
+9.2.1 Listagem de Pre-Alunos
+Coluna	Descricao
+Nome	Nome completo do pre-aluno
+Responsavel	Nome do responsavel financeiro
+Data de cadastro	Data em que a ficha foi criada
+Tipo de contrato	Ex: 6 meses, 12 meses, 24 meses
+Status	Em negociacao | Aguardando aprovacao | Aprovado | Matriculado | Cancelado
+Acoes	Ver detalhes, Gerar contrato, Finalizar matricula (Secretaria), Cancelar
+
+Filtros disponíveis: por status, por periodo de cadastro, por responsavel pelo cadastro (usuario Comercial).
+
+9.2.2 Cadastro de Pre-Aluno
+Botao: + Novo Pre-Aluno
+
+Formulario dividido em secoes:
+
+Dados do Responsavel
+Campo	Obrigatorio	Descricao
+CPF/CNPJ	Sim	Validado; se ja existir, sugere reaproveitar dados
+Tipo de pessoa	Sim	Fisica ou Juridica
+Nome e sobrenome	Sim	
+Telefone de contato	Sim	Celular principal
+E-mail	Nao	Para envio de contrato
+
+Dados do Pre-Aluno
+Campo	Obrigatorio	Descricao
+Nome e sobrenome	Sim	
+Data de nascimento	Sim	
+Telefone de contato	Nao	
+Livro de interesse	Sim	Selecao do catalogo de livros ativos
+Observacoes comerciais	Nao	Campo livre para anotacoes da equipe comercial
+
+Dados Comerciais e Contratuais
+Campo	Obrigatorio	Descricao
+Tipo de contrato	Sim	Duracao total. Ex: 6 meses, 12 meses, 24 meses
+Valor da mensalidade	Sim	Valor base mensal acordado (R$)
+Forma de pagamento da mensalidade	Sim	PIX, Boleto, Cartao, Dinheiro
+Material didatico — opcao	Sim	A vista (pagamento unico) ou Parcelado (incluso na mensalidade)
+Valor do material	Nao	Valor total do material didatico por semestre (R$)
+Data prevista de inicio	Sim	Data em que o aluno pretende comecar
+
+Regra de calculo do material parcelado
+Se opcao de material = 'Parcelado': valor do material / 6 (meses do semestre) = parcela mensal adicional.
+Essa parcela e somada automaticamente ao valor da mensalidade no contrato gerado.
+Exemplo: mensalidade R$290 + material R$180/semestre = R$180/6 = R$30/mes adicional = R$320/mes total.
+Cada semestre tem um valor de material proprio — o calculo e feito por semestre no contrato.
+
+9.3 Contratos — Geracao Automatica
+O sistema possui um mecanismo de geracao de contratos baseado em templates com variaveis dinamicas. O template e cadastrado uma vez pelo Coordenador ou Administrador, e o sistema substitui automaticamente as variaveis com os dados do pre-aluno ao gerar cada contrato.
+
+9.3.1 Template de Contrato
+Acessado pelo menu 'Comercial > Template de Contrato'. Disponivel para Coordenador e Administrador.
+
+Elemento	Descricao
+Editor de texto rico	Interface tipo Word para editar o modelo base do contrato
+Variaveis dinamicas	Placeholders no formato {{VARIAVEL}} inseridos no texto
+Botao Salvar versao	Cria nova versao do template (versoes anteriores sao preservadas)
+Historico de versoes	Lista das versoes anteriores com data e autor
+Adicionar variavel personalizada	Coordenador pode criar variaveis novas alem das padrao
+
+9.3.2 Variaveis Dinamicas Padrao
+Variavel	Substituida por	Exemplo de saida
+{{NOME_ALUNO}}	Nome completo do pre-aluno	JOAO DA SILVA
+{{NOME_RESPONSAVEL}}	Nome completo do responsavel	MARIA DA SILVA
+{{CPF_RESPONSAVEL}}	CPF do responsavel	123.456.789-00
+{{VALOR_MENSALIDADE}}	Valor da mensalidade (com material se parcelado)	R$ 320,00
+{{DURACAO_CONTRATO}}	Duracao total do contrato	24 meses
+{{DATA_INICIO}}	Data prevista de inicio	01/05/2026
+{{DATA_TERMINO}}	Data calculada de termino (inicio + duracao)	30/04/2028
+{{LIVRO}}	Nome do livro/nivel contratado	Book 1 Teens
+{{VALOR_MATERIAL}}	Valor do material didatico (se houver)	R$ 180,00
+{{OPCAO_MATERIAL}}	Forma de pagamento do material	Parcelado em 6x de R$ 30,00
+{{DATA_GERACAO}}	Data em que o contrato foi gerado	25/03/2026
+{{ESCOLA_NOME}}	Nome fantasia da escola	CWB Idiomas
+
+9.3.3 Fluxo de Geracao do Contrato
+32.	Comercial acessa o pre-aluno e clica em 'Gerar Contrato'.
+33.	Sistema carrega o template ativo mais recente.
+34.	Sistema substitui todas as variaveis {{...}} com os dados do pre-aluno.
+35.	Exibe preview do contrato gerado em tela para revisao antes de salvar.
+36.	Comercial pode fazer ajustes textuais pontuais no preview (nao altera o template base).
+37.	Ao confirmar: contrato e salvo em contratos_gerados com o conteudo final e a data de geracao.
+38.	Sistema disponibiliza opcoes: Imprimir | Baixar PDF | Enviar por e-mail.
+
+Versao do template no contrato gerado
+Cada contrato gerado registra o ID da versao do template utilizado (contrato_template_versao_id).
+Isso garante rastreabilidade: se o template for editado, os contratos antigos permanecem com o conteudo original.
+O conteudo gerado e armazenado integralmente em contratos_gerados.conteudo_gerado (TEXT) — nao depende do template para ser visualizado.
+
+9.3.4 Estrutura de Contratos por Semestre
+Para contratos de longa duracao (ex: 24 meses = 4 semestres), o contrato exibe uma tabela com a progressao de valores por semestre:
+
+Semestre	Periodo	Mensalidade	Material	Total mensal
+1o semestre	Mai/2026 - Out/2026	R$ 290,00	R$ 30,00 (parcelado)	R$ 320,00
+2o semestre	Nov/2026 - Abr/2027	R$ 290,00	R$ 30,00 (parcelado)	R$ 320,00
+3o semestre	Mai/2027 - Out/2027	R$ 310,00	R$ 30,00 (parcelado)	R$ 340,00
+4o semestre	Nov/2027 - Abr/2028	R$ 310,00	A vista (ja pago)	R$ 310,00
+
+A variavel {{TABELA_SEMESTRES}} e substituida por essa tabela automaticamente no contrato.
+
+9.3.5 Edicao do Contrato pelo Coordenador
+O Coordenador pode editar o template base de contrato a qualquer momento. Cada edicao cria uma nova versao — versoes anteriores sao preservadas para auditoria. O Coordenador tambem pode:
+•	Adicionar ou remover clausulas no texto base.
+•	Criar novas variaveis personalizadas alem das variaveis padrao do sistema.
+•	Definir qual versao e a 'ativa' para novos contratos.
+•	Visualizar contratos ja gerados (somente leitura).
+
+9.4 Finalizacao da Matricula (Fluxo Comercial -> Secretaria)
+Apos o contrato ser gerado e assinado, o fluxo segue para a Secretaria:
+
+39.	Comercial atualiza status do pre-aluno para 'Aguardando aprovacao'.
+40.	Secretaria recebe notificacao/visualiza na listagem de pre-alunos com status 'Aguardando aprovacao'.
+41.	Secretaria revisa os dados e clica em 'Aprovar Matricula' (policy: APROVAR_MATRICULA).
+42.	Status muda para 'Aprovado'.
+43.	Secretaria clica em 'Finalizar Matricula' (policy: FINALIZAR_MATRICULA).
+44.	Sistema executa automaticamente: (a) cria registro em responsaveis, (b) cria registro em alunos, (c) cria registro em matriculas com status = 'Ativo', (d) status do pre-aluno muda para 'Matriculado'.
+45.	Secretaria pode entao vincular o aluno a uma turma pelo modulo de Turmas.
+
+O pre-aluno nunca e excluido
+Apos a finalizacao, o registro em pre_alunos permanece com status = 'Matriculado' e referencia ao aluno_id criado.
+Pre-alunos cancelados ficam com status = 'Cancelado' — nunca sao deletados.
+Todo o ciclo (criacao, alteracoes, geracao de contrato, finalizacao) e registrado em logs_auditoria via Audit.NET.
+
+9.5 Impacto no Banco de Dados — Modulo Comercial
+9.5.1 Nova Tabela: pre_alunos
+Campo	Tipo	Nulo	Descricao
+id	INT AUTO_INCREMENT PK	NAO	Identificador unico
+escola_id	INT FK escolas	NAO	Multi-tenant
+responsavel_id	INT FK responsaveis	NAO	Responsavel financeiro (pode ser criado/reaproveitado)
+nome	VARCHAR(100)	NAO	Primeiro nome do pre-aluno
+sobrenome	VARCHAR(100)	NAO	Sobrenome
+data_nascimento	DATE	NAO	Data de nascimento
+telefone	VARCHAR(20)	SIM	Telefone do pre-aluno
+livro_interesse_id	INT FK livros	NAO	Livro/nivel de interesse
+tipo_contrato	VARCHAR(50)	NAO	Ex: 6 meses, 12 meses, 24 meses
+valor_mensalidade	DECIMAL(10,2)	NAO	Valor base da mensalidade acordada
+forma_pagamento	VARCHAR(50)	NAO	PIX, Boleto, Cartao, Dinheiro
+material_opcao	ENUM('A vista','Parcelado')	NAO	Opcao de pagamento do material
+valor_material	DECIMAL(10,2)	SIM	Valor do material por semestre
+data_inicio_prevista	DATE	NAO	Data prevista para inicio das aulas
+observacoes_comerciais	TEXT	SIM	Notas internas da equipe comercial
+status	ENUM('Em negociacao','Aguardando aprovacao','Aprovado','Matriculado','Cancelado')	NAO	Status atual no funil comercial
+aluno_id	INT FK alunos	SIM	Preenchido apos finalizacao da matricula
+criado_por_usuario_id	INT FK usuarios	NAO	Comercial que criou a ficha
+data_criacao	DATETIME	NAO	Timestamp UTC
+data_atualizacao	DATETIME	NAO	ON UPDATE CURRENT_TIMESTAMP
+
+9.5.2 Nova Tabela: contratos_templates
+Campo	Tipo	Nulo	Descricao
+id	INT AUTO_INCREMENT PK	NAO	
+escola_id	INT FK escolas	NAO	Multi-tenant
+versao	INT NOT NULL	NAO	Numero sequencial da versao (1, 2, 3...)
+template	LONGTEXT	NAO	Conteudo HTML/texto do template com variaveis {{...}}
+ativo	BOOLEAN DEFAULT FALSE	NAO	Apenas um template pode estar ativo por escola
+criado_por_usuario_id	INT FK usuarios	NAO	Quem criou/editou esta versao
+data_criacao	DATETIME	NAO	Timestamp UTC de criacao desta versao
+
+9.5.3 Nova Tabela: contratos_gerados
+Campo	Tipo	Nulo	Descricao
+id	INT AUTO_INCREMENT PK	NAO	
+escola_id	INT FK escolas	NAO	Multi-tenant
+pre_aluno_id	INT FK pre_alunos	NAO	Pre-aluno ao qual o contrato pertence
+template_id	INT FK contratos_templates	NAO	Versao do template usada na geracao
+conteudo_gerado	LONGTEXT	NAO	Texto final do contrato com variaveis ja substituidas
+gerado_por_usuario_id	INT FK usuarios	NAO	Usuario que gerou o contrato
+data_geracao	DATETIME	NAO	Timestamp UTC de geracao
+
+Indices novos para o Modulo Comercial
+idx_pre_alunos_escola_status: pre_alunos(escola_id, status) — listagem principal filtrada por status
+idx_pre_alunos_responsavel: pre_alunos(escola_id, responsavel_id) — busca por responsavel
+idx_contratos_templates_ativo: contratos_templates(escola_id, ativo) — busca do template ativo
+idx_contratos_gerados_pre_aluno: contratos_gerados(pre_aluno_id) — historico de contratos de um pre-aluno
+
+ 
+10. Controle de Acesso Avancado — Policy-Based Authorization
+A partir da v4, o sistema migra do controle por perfil (role-only) para um modelo de autorizacao baseado em permissoes granulares (Policy-Based Authorization). Isso permite que usuarios do mesmo perfil possam ter conjuntos diferentes de permissoes, e que novas permissoes sejam adicionadas sem alterar o codigo.
+
+10.1 Conceitos
+Conceito	Descricao	Exemplo
+Role (Perfil)	Agrupamento organizacional do usuario — define contexto geral	Comercial, Secretaria, Coordenador
+Policy (Permissao)	Acao especifica que o usuario pode ou nao realizar	CRIAR_PRE_ALUNO, EDITAR_CONTRATO
+Claim JWT	Dado embutido no token de autenticacao do usuario	Permissao: CRIAR_PRE_ALUNO
+Endpoint protegido	Rota da API que exige uma policy especifica	[Authorize(Policy = 'CRIAR_PRE_ALUNO')]
+
+Por que Policy-Based e nao so Roles?
+Com roles puras: um usuario Comercial OU tem acesso a tudo que Comercial acessa, ou nao tem nada.
+Com policies: e possivel dar a um usuario especifico apenas um subconjunto de permissoes do seu perfil.
+Exemplo: um Comercial trainee pode ter VISUALIZAR_PRE_ALUNO mas nao CRIAR_PRE_ALUNO ate ser liberado.
+Isso tambem facilita auditorias: cada acao e associada a uma permissao especifica no log.
+
+10.2 Catalogo de Permissoes (Policies)
+Permissao	Descricao	Perfis padrao
+CRIAR_PRE_ALUNO	Criar e editar fichas de pre-aluno	Comercial, Administrador
+VISUALIZAR_PRE_ALUNO	Ver lista e detalhes de pre-alunos	Comercial, Secretaria, Coordenador, Administrador
+GERAR_CONTRATO	Gerar contrato a partir do template	Comercial, Administrador
+EDITAR_TEMPLATE_CONTRATO	Editar modelo base do contrato	Coordenador, Administrador
+APROVAR_MATRICULA	Aprovar pre-aluno para matricula	Secretaria, Administrador
+FINALIZAR_MATRICULA	Converter pre-aluno em aluno	Secretaria, Administrador
+GERENCIAR_USUARIOS	Criar, editar e inativar usuarios	Administrador
+GERENCIAR_PERMISSOES	Alterar permissoes de usuarios especificos	Administrador
+CRIAR_TURMA	Criar e agendar turmas	Coordenador, Administrador
+GERENCIAR_CALENDARIO	Editar calendario geral	Coordenador, Administrador
+ACESSAR_FINANCEIRO	Visualizar e operar modulo financeiro	Financeiro, Administrador
+GERENCIAR_ESCOLAS	Super Admin — criar e gerenciar escolas	Super Admin apenas
+
+10.3 Modelagem de Banco — Permissoes
+10.3.1 Nova Tabela: permissoes
+Campo	Tipo	Descricao
+id	INT AUTO_INCREMENT PK	
+nome	VARCHAR(100) UNIQUE NOT NULL	Nome da policy. Ex: CRIAR_PRE_ALUNO
+descricao	TEXT	Descricao legivel da permissao
+
+10.3.2 Nova Tabela: usuario_permissoes
+Campo	Tipo	Descricao
+usuario_id	INT FK usuarios NOT NULL	Usuario que recebe a permissao
+permissao_id	INT FK permissoes NOT NULL	Permissao concedida
+concedido_por_usuario_id	INT FK usuarios	Administrador que concedeu
+data_concessao	DATETIME	Quando foi concedida
+PK composta	UNIQUE(usuario_id, permissao_id)	Impede duplicidade
+
+10.3.3 Tabela Opcional: perfil_permissoes
+Mapeamento das permissoes padrao por perfil. Usado na criacao de novos usuarios para pre-popular as permissoes conforme o perfil selecionado.
+Campo	Tipo	Descricao
+perfil_id	INT FK perfis NOT NULL	Perfil (role)
+permissao_id	INT FK permissoes NOT NULL	Permissao padrao do perfil
+PK composta	UNIQUE(perfil_id, permissao_id)	Impede duplicidade
+
+Fluxo de concessao de permissoes
+Ao criar um usuario: o sistema pre-popula usuario_permissoes com as permissoes padrao do perfil (via perfil_permissoes).
+O Administrador pode depois adicionar ou remover permissoes individuais em usuario_permissoes sem alterar o perfil.
+No login: o JWT e gerado com a lista de permissoes atuais do usuario (consulta usuario_permissoes).
+No backend: cada endpoint usa [Authorize(Policy='NOME_POLICY')] — o .NET valida o claim no JWT.
+No frontend: componentes verificam a lista de permissoes do JWT para exibir/ocultar botoes e telas.
+
+10.4 Implementacao Backend (C#)
+10.4.1 Configuracao de Policies no Program.cs
+Registro das policies no startup
+builder.Services.AddAuthorization(options => {
+    options.AddPolicy("CRIAR_PRE_ALUNO",
+        policy => policy.RequireClaim("Permissao", "CRIAR_PRE_ALUNO"));
+    options.AddPolicy("FINALIZAR_MATRICULA",
+        policy => policy.RequireClaim("Permissao", "FINALIZAR_MATRICULA"));
+    // ... demais policies
+});
+
+10.4.2 Protecao de Endpoints
+Uso nos controllers
+[HttpPost]
+[Authorize(Policy = "CRIAR_PRE_ALUNO")]
+public async Task<IActionResult> CriarPreAluno([FromBody] PreAlunoDto dto) { ... }
+
+[HttpPost("finalizar")]
+[Authorize(Policy = "FINALIZAR_MATRICULA")]
+public async Task<IActionResult> FinalizarMatricula(int preAlunoId) { ... }
+
+10.4.3 Geracao do JWT com Claims de Permissao
+Claims no token
+var permissoes = await _usuarioPermissaoService.GetPermissoesAsync(usuarioId);
+var claims = new List<Claim> {
+    new Claim("usuario_id", usuario.Id.ToString()),
+    new Claim("escola_id", usuario.EscolaId.ToString()),
+    new Claim("perfil", usuario.Perfil.Nome),
+};
+foreach (var p in permissoes)
+    claims.Add(new Claim("Permissao", p.Nome));
+// JWT gerado com todas as permissoes como claims individuais
+
+10.5 Super Admin — Gestao de Escolas
+O Super Admin e um nivel especial de acesso que existe FORA da estrutura de escolas. Ele nao pertence a nenhuma escola especifica e tem acesso ao painel de administracao global do sistema.
+
+Funcionalidade	Descricao
+Criar nova escola	Cadastrar escola com nome, codigo unico de login e status
+Criar Admin da escola	Criar o primeiro usuario Administrador de uma escola recem-criada
+Gerenciar escolas	Ativar, inativar, editar dados de escolas existentes
+Visualizar escolas	Listar todas as escolas com status e data de criacao
+Acessar como escola (impersonar)	Entrar no sistema como se fosse um admin da escola para suporte
+
+Super Admin — regras de isolamento
+O Super Admin NAO tem acesso a dados academicos ou financeiros de nenhuma escola.
+O Super Admin so pode criar/editar escolas e o primeiro Admin de cada escola.
+Toda acao do Super Admin e registrada em logs_auditoria com escola_id = NULL.
+O login do Super Admin usa um codigo de escola reservado (ex: 'SYSTEM') ou uma rota separada.
+Implementacao: usuario com perfil especial no banco (perfil_id = 'superadmin') sem escola_id vinculado.
+

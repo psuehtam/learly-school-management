@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Learly.API/Learly.API.csproj" />
+  <Project Path="Learly.Application/Learly.Application.csproj" />
+  <Project Path="Learly.Domain/Learly.Domain.csproj" />
+  <Project Path="Learly.Infrastructure/Learly.Infrastructure.csproj" />
+</Solution>

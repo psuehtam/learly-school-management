@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Learly.Domain\Learly.Domain.csproj" />
+    <ProjectReference Include="..\Learly.Infrastructure\Learly.Infrastructure.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

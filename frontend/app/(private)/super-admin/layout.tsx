@@ -8,13 +8,15 @@ import { SUPER_ADMIN_MENU } from "@/lib/menu-config";
 import { Sidebar } from "@/components/layout/sidebar";
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(() => getSessionInfo());
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    setSession(getSessionInfo());
     getCurrentUser()
-      .then((u) => setUser(u))
+      .then((u) => {
+        setUser(u);
+        setSession(getSessionInfo());
+      })
       .catch(() => {});
   }, []);
 

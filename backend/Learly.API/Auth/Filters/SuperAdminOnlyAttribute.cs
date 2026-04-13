@@ -14,7 +14,12 @@ public sealed class SuperAdminOnlyAttribute : Attribute, IAuthorizationFilter
         var uc = context.HttpContext.GetUserContext();
         if (!uc.IsSuperAdmin)
         {
-            context.Result = new ObjectResult(new { message = "Acesso restrito a Super Admin." })
+            context.Result = new ObjectResult(new ProblemDetails
+            {
+                Title = "Acesso negado",
+                Detail = "Acesso restrito a Super Admin.",
+                Status = StatusCodes.Status403Forbidden
+            })
             {
                 StatusCode = StatusCodes.Status403Forbidden
             };

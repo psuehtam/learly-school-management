@@ -9,16 +9,23 @@ export function useAulas(filtros?: Record<string, string>) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(() => {
+  const fetch = useCallback(async () => {
+    await Promise.resolve();
     setIsLoading(true);
     setError(null);
-    listarAulas(filtros)
-      .then(setAulas)
-      .catch((e) => setError(e instanceof Error ? e.message : "Erro ao carregar aulas"))
-      .finally(() => setIsLoading(false));
+    try {
+      const data = await listarAulas(filtros);
+      setAulas(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao carregar aulas");
+    } finally {
+      setIsLoading(false);
+    }
   }, [filtros]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => {
+    void fetch();
+  }, [fetch]);
 
   return { aulas, isLoading, error, refetch: fetch };
 }

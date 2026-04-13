@@ -578,6 +578,7 @@ sketch
 
 # Secrets do backend
 appsettings.Development.json
+backend/Learly.API/appsettings.Development.json
 
 # Artefatos de build .NET (reforço)
 **/bin/

@@ -1,13 +1,18 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Learly.Infrastructure.Data;
 using Learly.API.Auth;
 using Learly.API.Auth.Repositories;
 using Learly.API.Auth.Services;
+using Learly.Application.Services.Aulas;
+using Learly.Application.Services.Escolas;
 using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,27 +20,82 @@ var builder = WebApplication.CreateBuilder(args);
 // --- INÍCIO DA CONFIGURAÇÃO DO BANCO DE DADOS ---
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddDbContext<LearlyDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+if (string.Equals(builder.Environment.EnvironmentName, "Testing", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddDbContext<LearlyDbContext>(options =>
+        options.UseInMemoryDatabase("learly-tests"));
+}
+else
+{
+    builder.Services.AddDbContext<LearlyDbContext>(options =>
+        options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36))));
+}
 // --- FIM DA CONFIGURAÇÃO DO BANCO DE DADOS ---
 
 // --- CONFIGURAÇÃO JWT ---
-var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new Exception("Jwt:Key não configurado");
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) &&
+    string.Equals(builder.Environment.EnvironmentName, "Testing", StringComparison.OrdinalIgnoreCase))
+{
+    jwtKey = "TEST_ONLY_SUPER_SECRET_KEY_WITH_AT_LEAST_32_CHARS";
+}
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    throw new Exception("Jwt:Key não configurado.");
+}
+if (!string.Equals(builder.Environment.EnvironmentName, "Testing", StringComparison.OrdinalIgnoreCase) &&
+    jwtKey.Length < 32)
+{
+    throw new Exception("Jwt:Key precisa ter no mínimo 32 caracteres.");
+}
+
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "LearlyAPI";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "LearlyClient";
 var jwtExpireMinutes = int.TryParse(builder.Configuration["Jwt:ExpireMinutes"], out var m) ? m : 60;
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var pd = new ValidationProblemDetails(context.ModelState)
+        {
+            Title = "Requisicao invalida",
+            Status = StatusCodes.Status400BadRequest
+        };
+        return new BadRequestObjectResult(pd);
+    };
+});
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEscolasService, EscolasService>();
+builder.Services.AddScoped<IAulasService, AulasService>();
 
 // Add authentication and authorization
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.RequireHttpsMetadata = false;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrWhiteSpace(context.Token) &&
+                    context.Request.Cookies.TryGetValue(AuthConstants.AccessTokenCookieName, out var tokenFromCookie))
+                {
+                    context.Token = tokenFromCookie;
+                }
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                PermissionJwtClaims.ExpandCompressedPermissions(context.Principal);
+                return Task.CompletedTask;
+            }
+        };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
@@ -48,6 +108,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.FromMinutes(1)
         };
     });
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"login:{ip}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+});
 
 builder.Services.AddAuthorization(options =>
 {
@@ -246,11 +324,28 @@ builder.Services.AddOpenApi();
 // --- CONFIGURAÇÃO CORS ---
 builder.Services.AddCors(options =>
 {
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowCredentials()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+            return;
+        }
+
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.WithOrigins("http://localhost:3000", "https://localhost:3000")
+                  .AllowCredentials()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+            return;
+        }
+
+        throw new InvalidOperationException("Cors:AllowedOrigins deve ser configurado em produção.");
     });
 });
 
@@ -265,6 +360,22 @@ app.UseHttpsRedirection();
 
 // --- HABILITAR CORS ---
 app.UseCors("AllowAll");
+app.UseRateLimiter();
+app.UseExceptionHandler();
+app.UseStatusCodePages(async statusCodeContext =>
+{
+    var response = statusCodeContext.HttpContext.Response;
+    if (response.HasStarted || response.ContentLength is > 0) return;
+
+    var pd = new ProblemDetails
+    {
+        Title = ReasonPhrases.GetReasonPhrase(response.StatusCode),
+        Status = response.StatusCode
+    };
+
+    response.ContentType = "application/problem+json";
+    await response.WriteAsJsonAsync(pd);
+});
 
 // --- HABILITAR AUTENTICAÇÃO/AUTORIZAÇÃO ---
 app.UseAuthentication();
@@ -318,3 +429,5 @@ app.MapGet("/api/pre-alunos/criar", [Microsoft.AspNetCore.Authorization.Authoriz
 app.Run();
 
 
+
+public partial class Program { }

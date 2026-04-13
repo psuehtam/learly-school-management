@@ -9,33 +9,54 @@ export function useAlunos(filtros?: Record<string, string>) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(() => {
+  const fetch = useCallback(async () => {
+    await Promise.resolve();
     setIsLoading(true);
     setError(null);
-    listarAlunos(filtros)
-      .then(setAlunos)
-      .catch((e) => setError(e instanceof Error ? e.message : "Erro ao carregar alunos"))
-      .finally(() => setIsLoading(false));
+    try {
+      const data = await listarAlunos(filtros);
+      setAlunos(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao carregar alunos");
+    } finally {
+      setIsLoading(false);
+    }
   }, [filtros]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => {
+    void fetch();
+  }, [fetch]);
 
   return { alunos, isLoading, error, refetch: fetch };
 }
 
 export function useAluno(id: number | null) {
   const [aluno, setAluno] = useState<Aluno | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => id !== null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (id === null) { setIsLoading(false); return; }
+  const load = useCallback(async () => {
+    await Promise.resolve();
+    if (id === null) {
+      setAluno(null);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
-    buscarAluno(id)
-      .then(setAluno)
-      .catch((e) => setError(e instanceof Error ? e.message : "Erro ao carregar aluno"))
-      .finally(() => setIsLoading(false));
+    setError(null);
+    try {
+      const data = await buscarAluno(id);
+      setAluno(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao carregar aluno");
+    } finally {
+      setIsLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return { aluno, isLoading, error };
 }

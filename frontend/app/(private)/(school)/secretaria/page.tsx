@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import Link from "next/link";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ const financeiroColors = { em_dia: "bg-green-50 text-green-700", pendente: "bg-a
 const financeiroLabel = { em_dia: "Em dia", pendente: "Pendente", atrasado: "Atrasado" };
 
 // ─── Componentes Auxiliares ───────────────────────────────────────────────────
-interface CampoProps extends React.InputHTMLAttributes<HTMLInputElement | HTMLSelectElement> {
+interface CampoProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
 }
 
@@ -100,7 +100,7 @@ function Campo({ label, className, ...props }: CampoProps) {
     <div className="flex flex-col gap-1.5 w-full">
       <label className="text-sm font-medium text-zinc-700">{label}</label>
       <input 
-        {...props as any}
+        {...props}
         className={`h-10 w-full border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition disabled:bg-zinc-50 disabled:text-zinc-500 ${className || ''}`} 
       />
     </div>
@@ -153,15 +153,42 @@ interface ModalMatriculaProps {
   onGerarContrato?: (m: Matricula) => void; // 👉 NOVO: Adicionado onGerarContrato
 }
 
+function createNovaMatricula(): Matricula {
+  const d = new Date();
+  return {
+    id: d.getTime(),
+    nomeAluno: "",
+    cpfAluno: "",
+    rgAluno: "",
+    dataNascimento: "",
+    telefoneAluno: "",
+    emailAluno: "",
+    cep: "",
+    logradouro: "",
+    numero: "",
+    bairro: "",
+    cidade: "",
+    maiorDeIdade: false,
+    nomeResponsavel: "",
+    cpfResponsavel: "",
+    telefoneResponsavel: "",
+    turma: "—",
+    status: "ativo",
+    dataIngresso: d.toLocaleDateString("pt-BR"),
+    statusFinanceiro: "em_dia",
+    tempoContrato: 0,
+    valoresDiferentes: false,
+    valorMensalidade: "",
+    valorMaterial: "",
+    valores: [],
+    anexos: [],
+  };
+}
+
 function ModalMatricula({ matricula, isPendencia = false, onClose, onSave, onDevolver, onGerarContrato }: ModalMatriculaProps) {
   const isEdit = !!matricula && !isPendencia;
   
-  const [form, setForm] = useState<Matricula>(matricula || {
-    id: Date.now(), nomeAluno: "", cpfAluno: "", rgAluno: "", dataNascimento: "", telefoneAluno: "", emailAluno: "", cep: "", logradouro: "", numero: "", bairro: "", cidade: "",
-    maiorDeIdade: false, nomeResponsavel: "", cpfResponsavel: "", telefoneResponsavel: "",
-    turma: "—", status: "ativo", dataIngresso: new Date().toLocaleDateString('pt-BR'), statusFinanceiro: "em_dia",
-    tempoContrato: 0, valoresDiferentes: false, valorMensalidade: "", valorMaterial: "", valores: [], anexos: []
-  });
+  const [form, setForm] = useState<Matricula>(() => matricula ?? createNovaMatricula());
 
   const [abaAtual, setAbaAtual] = useState<"dados" | "valores" | "anexos">("dados");
   
@@ -256,25 +283,25 @@ function ModalMatricula({ matricula, isPendencia = false, onClose, onSave, onDev
                 <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm">
                   <h3 className="text-sm font-bold text-zinc-800 mb-4 border-b border-zinc-100 pb-2">Informações do Aluno</h3>
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                    <Campo label="Nome Completo *" value={form.nomeAluno} onChange={(e: any) => setForm({...form, nomeAluno: e.target.value})} />
-                    <Campo label="E-mail" type="email" value={form.emailAluno} onChange={(e: any) => setForm({...form, emailAluno: e.target.value})} />
-                    <Campo label="Telefone / WhatsApp *" value={form.telefoneAluno} onChange={(e: any) => setForm({...form, telefoneAluno: e.target.value})} />
-                    <Campo label="Data Nascimento *" type="date" value={form.dataNascimento} onChange={(e: any) => setForm({...form, dataNascimento: e.target.value})} />
+                    <Campo label="Nome Completo *" value={form.nomeAluno} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, nomeAluno: e.target.value})} />
+                    <Campo label="E-mail" type="email" value={form.emailAluno} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, emailAluno: e.target.value})} />
+                    <Campo label="Telefone / WhatsApp *" value={form.telefoneAluno} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, telefoneAluno: e.target.value})} />
+                    <Campo label="Data Nascimento *" type="date" value={form.dataNascimento} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, dataNascimento: e.target.value})} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <Campo label="CPF *" value={form.cpfAluno} onChange={(e: any) => setForm({...form, cpfAluno: e.target.value})} placeholder="000.000.000-00" />
-                    <Campo label="RG" value={form.rgAluno} onChange={(e: any) => setForm({...form, rgAluno: e.target.value})} placeholder="00.000.000-0" />
+                    <Campo label="CPF *" value={form.cpfAluno} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, cpfAluno: e.target.value})} placeholder="000.000.000-00" />
+                    <Campo label="RG" value={form.rgAluno} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, rgAluno: e.target.value})} placeholder="00.000.000-0" />
                   </div>
                 </div>
 
                 <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm">
                   <h3 className="text-sm font-bold text-zinc-800 mb-4 border-b border-zinc-100 pb-2">Endereço Residencial</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="col-span-2 md:col-span-1"><Campo label="CEP *" value={form.cep} onChange={(e: any) => setForm({...form, cep: e.target.value})} placeholder="00000-000" /></div>
-                    <div className="col-span-2 md:col-span-3"><Campo label="Logradouro *" value={form.logradouro} onChange={(e: any) => setForm({...form, logradouro: e.target.value})} placeholder="Rua, Avenida..." /></div>
-                    <div className="col-span-1"><Campo label="Número *" value={form.numero} onChange={(e: any) => setForm({...form, numero: e.target.value})} placeholder="123" /></div>
-                    <div className="col-span-1 md:col-span-1"><Campo label="Bairro *" value={form.bairro} onChange={(e: any) => setForm({...form, bairro: e.target.value})} placeholder="Centro" /></div>
-                    <div className="col-span-2"><Campo label="Cidade *" value={form.cidade} onChange={(e: any) => setForm({...form, cidade: e.target.value})} placeholder="São Paulo - SP" /></div>
+                    <div className="col-span-2 md:col-span-1"><Campo label="CEP *" value={form.cep} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, cep: e.target.value})} placeholder="00000-000" /></div>
+                    <div className="col-span-2 md:col-span-3"><Campo label="Logradouro *" value={form.logradouro} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, logradouro: e.target.value})} placeholder="Rua, Avenida..." /></div>
+                    <div className="col-span-1"><Campo label="Número *" value={form.numero} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, numero: e.target.value})} placeholder="123" /></div>
+                    <div className="col-span-1 md:col-span-1"><Campo label="Bairro *" value={form.bairro} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, bairro: e.target.value})} placeholder="Centro" /></div>
+                    <div className="col-span-2"><Campo label="Cidade *" value={form.cidade} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, cidade: e.target.value})} placeholder="São Paulo - SP" /></div>
                   </div>
                 </div>
 
@@ -282,9 +309,9 @@ function ModalMatricula({ matricula, isPendencia = false, onClose, onSave, onDev
                   <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm">
                     <h3 className="text-sm font-bold text-amber-800 mb-4 border-b border-zinc-100 pb-2">Dados do Responsável Financeiro</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <Campo label="Nome do Responsável *" value={form.nomeResponsavel} onChange={(e: any) => setForm({...form, nomeResponsavel: e.target.value})} />
-                      <Campo label="CPF do Responsável *" value={form.cpfResponsavel} onChange={(e: any) => setForm({...form, cpfResponsavel: e.target.value})} placeholder="000.000.000-00" />
-                      <Campo label="Telefone do Responsável *" value={form.telefoneResponsavel} onChange={(e: any) => setForm({...form, telefoneResponsavel: e.target.value})} placeholder="(00) 00000-0000" />
+                      <Campo label="Nome do Responsável *" value={form.nomeResponsavel} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, nomeResponsavel: e.target.value})} />
+                      <Campo label="CPF do Responsável *" value={form.cpfResponsavel} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, cpfResponsavel: e.target.value})} placeholder="000.000.000-00" />
+                      <Campo label="Telefone do Responsável *" value={form.telefoneResponsavel} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, telefoneResponsavel: e.target.value})} placeholder="(00) 00000-0000" />
                     </div>
                   </div>
                 )}
@@ -296,7 +323,7 @@ function ModalMatricula({ matricula, isPendencia = false, onClose, onSave, onDev
                 <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm">
                   <h3 className="text-sm font-bold text-zinc-800 mb-4 border-b border-zinc-100 pb-2">Dados do Sistema (Matrícula)</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <Campo label="Data de Ingresso *" type="date" value={form.dataIngresso.split('/').reverse().join('-')} onChange={(e: any) => setForm({...form, dataIngresso: e.target.value.split('-').reverse().join('/')})} />
+                    <Campo label="Data de Ingresso *" type="date" value={form.dataIngresso.split('/').reverse().join('-')} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, dataIngresso: e.target.value.split('-').reverse().join('/')})} />
                     <div className="flex flex-col gap-1.5 w-full">
                       <label className="text-sm font-medium text-zinc-700">Turma Inicial</label>
                       <select value={form.turma} onChange={(e) => setForm({...form, turma: e.target.value})} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] bg-white">
@@ -330,8 +357,8 @@ function ModalMatricula({ matricula, isPendencia = false, onClose, onSave, onDev
 
                       {!form.valoresDiferentes ? (
                         <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-lg border border-zinc-200">
-                          <Campo label="Mensalidade Padrão (R$) *" value={form.valorMensalidade} onChange={(e: any) => setForm({...form, valorMensalidade: e.target.value})} placeholder="Ex: 250,00" />
-                          <Campo label="Material Padrão (R$)" value={form.valorMaterial} onChange={(e: any) => setForm({...form, valorMaterial: e.target.value})} placeholder="Ex: 300,00" />
+                          <Campo label="Mensalidade Padrão (R$) *" value={form.valorMensalidade} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, valorMensalidade: e.target.value})} placeholder="Ex: 250,00" />
+                          <Campo label="Material Padrão (R$)" value={form.valorMaterial} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, valorMaterial: e.target.value})} placeholder="Ex: 300,00" />
                         </div>
                       ) : (
                         <div className="flex flex-col gap-3">
@@ -340,8 +367,8 @@ function ModalMatricula({ matricula, isPendencia = false, onClose, onSave, onDev
                             <div key={i} className="flex gap-4 items-center bg-zinc-50 p-4 rounded-lg border border-zinc-200 shadow-sm">
                               <span className="text-sm font-bold text-[#1F2A35] uppercase w-28 whitespace-nowrap">{i + 1}º Semestre</span>
                               <div className="grid grid-cols-2 gap-4 flex-1">
-                                <Campo label="Mensalidade (R$) *" value={v.mensalidade} onChange={(e: any) => handleValorSemestreChange(i, 'mensalidade', e.target.value)} placeholder="Ex: 250,00" />
-                                <Campo label="Material (R$)" value={v.material} onChange={(e: any) => handleValorSemestreChange(i, 'material', e.target.value)} placeholder="Ex: 300,00" />
+                                <Campo label="Mensalidade (R$) *" value={v.mensalidade} onChange={(e: ChangeEvent<HTMLInputElement>) => handleValorSemestreChange(i, 'mensalidade', e.target.value)} placeholder="Ex: 250,00" />
+                                <Campo label="Material (R$)" value={v.material} onChange={(e: ChangeEvent<HTMLInputElement>) => handleValorSemestreChange(i, 'material', e.target.value)} placeholder="Ex: 300,00" />
                               </div>
                             </div>
                           ))}
@@ -366,8 +393,8 @@ function ModalMatricula({ matricula, isPendencia = false, onClose, onSave, onDev
                     onClick={() => {
                       if(!form.cpfAluno || !form.logradouro) {
                         alert("Preencha o CPF e o Endereço nas abas anteriores antes de gerar o PDF.");
-                      } else {
-                        onGerarContrato && onGerarContrato(form);
+                      } else if (onGerarContrato) {
+                        onGerarContrato(form);
                       }
                     }} 
                     className="h-10 px-5 bg-white border border-[#1F2A35] text-[#1F2A35] font-bold rounded-lg hover:bg-zinc-50 transition-colors flex items-center gap-2"
@@ -432,7 +459,7 @@ function ModalMatricula({ matricula, isPendencia = false, onClose, onSave, onDev
                 <div className="flex-1 flex gap-2 items-center bg-red-50 p-2 rounded-lg border border-red-200 mr-4">
                   <input type="text" placeholder="Motivo da devolução..." value={motivoDevolucao} onChange={e => setMotivoDevolucao(e.target.value)} className="h-9 flex-1 px-3 rounded border border-red-300 text-sm outline-none focus:border-red-500" />
                   <button onClick={() => setDevolvendo(false)} className="h-9 px-3 text-xs font-bold text-zinc-600 hover:bg-red-100 rounded">Cancelar</button>
-                  <button disabled={!motivoDevolucao.trim()} onClick={() => { onDevolver && onDevolver(motivoDevolucao); onClose(); }} className="h-9 px-4 text-xs font-bold text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50">Confirmar Devolução</button>
+                  <button disabled={!motivoDevolucao.trim()} onClick={() => { if (onDevolver) onDevolver(motivoDevolucao); onClose(); }} className="h-9 px-4 text-xs font-bold text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50">Confirmar Devolução</button>
                 </div>
               ) : (
                 <button onClick={() => setDevolvendo(true)} className="h-10 px-4 text-sm font-bold text-red-600 bg-white border-2 border-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-2">

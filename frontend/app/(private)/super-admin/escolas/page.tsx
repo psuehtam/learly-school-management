@@ -1,72 +1,41 @@
 "use client";
 
-import { useState } from "react";
-
-type StatusEscola = "Ativo" | "Inativo";
-
-interface Escola {
-  id: number;
-  codigo: string;
-  nomeFantasia: string;
-  razaoSocial: string;
-  cnpj: string;
-  status: StatusEscola;
-  criadoEm: string;
-}
-
-const escolasIniciais: Escola[] = [
-  {
-    id: 1,
-    codigo: "ESCOLA-TESTE-01",
-    nomeFantasia: "Escola Teste 01",
-    razaoSocial: "Escola Teste 01 LTDA",
-    cnpj: "00.000.000/0001-00",
-    status: "Ativo",
-    criadoEm: "27/03/2026",
-  },
-  {
-    id: 2,
-    codigo: "CWB-IDIOM",
-    nomeFantasia: "CWB Idiomas",
-    razaoSocial: "CWB Idiomas EIRELI",
-    cnpj: "12.345.678/0001-90",
-    status: "Ativo",
-    criadoEm: "15/01/2026",
-  },
-  {
-    id: 3,
-    codigo: "DEMO-SCHOOL",
-    nomeFantasia: "Escola Demo (inativa)",
-    razaoSocial: "Demo LTDA",
-    cnpj: "98.765.432/0001-10",
-    status: "Inativo",
-    criadoEm: "01/12/2025",
-  },
-];
+import { useEffect, useState } from "react";
+import { getApiErrorMessage } from "@/lib/api/client";
+import { criarEscola, listarEscolas, type Escola } from "@/lib/api/escolas";
 
 function ModalNovaEscola({
   onClose,
   onSave,
 }: {
   onClose: () => void;
-  onSave: (d: Omit<Escola, "id" | "criadoEm">) => void;
+  onSave: (d: { codigoEscola: string; nomeFantasia: string; razaoSocial?: string; cnpj?: string }) => Promise<void>;
 }) {
-  const [codigo, setCodigo] = useState("");
+  const [codigoEscola, setCodigoEscola] = useState("");
   const [nomeFantasia, setNomeFantasia] = useState("");
   const [razaoSocial, setRazaoSocial] = useState("");
   const [cnpj, setCnpj] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [erro, setErro] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!codigo.trim() || !nomeFantasia.trim()) return;
-    onSave({
-      codigo: codigo.trim().toUpperCase(),
+    if (!codigoEscola.trim() || !nomeFantasia.trim()) return;
+    setSubmitting(true);
+    setErro("");
+    try {
+      await onSave({
+      codigoEscola: codigoEscola.trim().toUpperCase(),
       nomeFantasia: nomeFantasia.trim(),
-      razaoSocial: razaoSocial.trim() || nomeFantasia.trim(),
-      cnpj: cnpj.trim() || "—",
-      status: "Ativo",
-    });
-    onClose();
+      razaoSocial: razaoSocial.trim() || undefined,
+      cnpj: cnpj.trim() || undefined,
+      });
+      onClose();
+    } catch (e) {
+      setErro(getApiErrorMessage(e, "Nao foi possivel criar a escola."));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -93,8 +62,8 @@ function ModalNovaEscola({
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-zinc-700">Código da escola *</label>
             <input
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+              value={codigoEscola}
+              onChange={(e) => setCodigoEscola(e.target.value.toUpperCase())}
               className="h-10 border border-zinc-300 rounded-lg px-3 text-sm uppercase"
               placeholder="Ex: MINHA-ESCOLA"
               required
@@ -126,6 +95,9 @@ function ModalNovaEscola({
               placeholder="Opcional"
             />
           </div>
+          {erro && (
+            <p className="text-xs text-red-600">{erro}</p>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -136,9 +108,10 @@ function ModalNovaEscola({
             </button>
             <button
               type="submit"
+              disabled={submitting}
               className="h-9 px-4 text-sm font-medium text-white bg-[#0f172a] rounded-lg hover:bg-[#1e293b]"
             >
-              Cadastrar
+              {submitting ? "Salvando..." : "Cadastrar"}
             </button>
           </div>
         </form>
@@ -148,31 +121,39 @@ function ModalNovaEscola({
 }
 
 export default function SuperAdminEscolasPage() {
-  const [escolas, setEscolas] = useState<Escola[]>(escolasIniciais);
+  const [escolas, setEscolas] = useState<Escola[]>([]);
   const [modalNova, setModalNova] = useState(false);
   const [filtro, setFiltro] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function carregar() {
+      try {
+        setLoading(true);
+        setErro("");
+        const data = await listarEscolas();
+        if (!cancelled) setEscolas(data);
+      } catch (e) {
+        if (!cancelled) setErro(getApiErrorMessage(e, "Falha ao carregar escolas."));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void carregar();
+    return () => { cancelled = true; };
+  }, []);
 
   const filtradas = escolas.filter(
     (e) =>
-      e.codigo.toLowerCase().includes(filtro.toLowerCase()) ||
+      e.codigoEscola.toLowerCase().includes(filtro.toLowerCase()) ||
       e.nomeFantasia.toLowerCase().includes(filtro.toLowerCase())
   );
 
-  function alternarStatus(id: number) {
-    setEscolas((prev) =>
-      prev.map((e) =>
-        e.id === id ? { ...e, status: e.status === "Ativo" ? "Inativo" : "Ativo" } : e
-      )
-    );
-  }
-
-  function adicionarEscola(d: Omit<Escola, "id" | "criadoEm">) {
-    const novo: Escola = {
-      ...d,
-      id: Math.max(0, ...escolas.map((e) => e.id)) + 1,
-      criadoEm: new Date().toLocaleDateString("pt-BR"),
-    };
-    setEscolas((prev) => [novo, ...prev]);
+  async function adicionarEscola(d: { codigoEscola: string; nomeFantasia: string; razaoSocial?: string; cnpj?: string }) {
+    const nova = await criarEscola(d);
+    setEscolas((prev) => [nova, ...prev]);
   }
 
   return (
@@ -224,7 +205,19 @@ export default function SuperAdminEscolasPage() {
               </tr>
             </thead>
             <tbody>
-              {filtradas.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-12 text-center text-zinc-400">
+                    Carregando escolas...
+                  </td>
+                </tr>
+              ) : erro ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-12 text-center text-red-500">
+                    {erro}
+                  </td>
+                </tr>
+              ) : filtradas.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-5 py-12 text-center text-zinc-400">
                     Nenhuma escola encontrada.
@@ -233,12 +226,12 @@ export default function SuperAdminEscolasPage() {
               ) : (
                 filtradas.map((e) => (
                   <tr key={e.id} className="border-b border-zinc-100 hover:bg-zinc-50/80">
-                    <td className="px-5 py-3 font-mono text-xs text-zinc-800">{e.codigo}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-zinc-800">{e.codigoEscola}</td>
                     <td className="px-5 py-3">
                       <span className="font-medium text-zinc-900">{e.nomeFantasia}</span>
-                      <p className="text-xs text-zinc-400 mt-0.5 md:hidden">{e.cnpj}</p>
+                      <p className="text-xs text-zinc-400 mt-0.5 md:hidden">ID {e.id}</p>
                     </td>
-                    <td className="px-5 py-3 text-zinc-600 hidden md:table-cell">{e.cnpj}</td>
+                    <td className="px-5 py-3 text-zinc-600 hidden md:table-cell">ID {e.id}</td>
                     <td className="px-5 py-3">
                       <span
                         className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${
@@ -250,19 +243,7 @@ export default function SuperAdminEscolasPage() {
                         {e.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => alternarStatus(e.id)}
-                        className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                          e.status === "Ativo"
-                            ? "border-amber-200 text-amber-800 hover:bg-amber-50"
-                            : "border-emerald-200 text-emerald-800 hover:bg-emerald-50"
-                        }`}
-                      >
-                        {e.status === "Ativo" ? "Inativar" : "Ativar"}
-                      </button>
-                    </td>
+                    <td className="px-5 py-3 text-right text-xs text-zinc-400">—</td>
                   </tr>
                 ))
               )}
@@ -272,7 +253,7 @@ export default function SuperAdminEscolasPage() {
       </div>
 
       <p className="text-xs text-zinc-400">
-        Dados de demonstração — conecte a API de escolas (`GERENCIAR_ESCOLAS` / Super Admin) quando o backend estiver pronto.
+        Lista alimentada pela API (`GET /api/escolas`). Criacao usa `POST /api/escolas`.
       </p>
 
       {modalNova && (

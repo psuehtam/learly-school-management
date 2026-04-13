@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrentUser } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
-import { clearToken, getToken } from "@/lib/auth";
+import { clearToken, hasSessionCookie, saveSessionInfo } from "@/lib/auth";
 import { resolveLandingFromUser } from "@/lib/landing-page";
 
 /** Raiz: resolve landing dinâmica a partir das permissões efetivas do usuário. */
@@ -13,13 +13,18 @@ export default function Home() {
 
   useEffect(() => {
     async function run() {
-      const token = getToken();
-      if (!token) {
+      if (!hasSessionCookie()) {
         router.replace("/login");
         return;
       }
       try {
         const user = await getCurrentUser();
+        saveSessionInfo({
+          nome: user.nome,
+          perfil: user.role,
+          email: user.email,
+          isSuperAdmin: Boolean(user.isSuperAdmin),
+        });
         router.replace(resolveLandingFromUser(user));
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) return;

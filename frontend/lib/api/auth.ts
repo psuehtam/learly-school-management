@@ -1,5 +1,4 @@
 import { apiRequest } from "@/lib/api/client";
-import { getToken } from "@/lib/auth";
 import type { User } from "@/lib/api/types";
 
 type LoginRequest = {
@@ -21,8 +20,8 @@ type LoginUserPayload = {
 };
 
 type LoginResponse = {
-  token: string;
   usuario: LoginUserPayload;
+  /** ISO UTC — expiração do JWT / cookies */
   expiraEmUtc?: string;
 };
 
@@ -38,27 +37,6 @@ type ApiMePayload = {
   permissions?: string[];
   email?: string;
 };
-
-function decodeUserIdFromToken(token: string | null): number | null {
-  if (!token) return null;
-
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(
-      base64.length + ((4 - (base64.length % 4)) % 4),
-      "=",
-    );
-    const json = atob(padded);
-    const payload = JSON.parse(json) as Record<string, unknown>;
-    const raw = payload.userId ?? payload.sub;
-    const num = Number(raw);
-    return Number.isFinite(num) ? num : null;
-  } catch {
-    return null;
-  }
-}
 
 function normalizePermissions(data: {
   permissoes?: string[];
@@ -77,9 +55,7 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
 
 export async function getCurrentUser(): Promise<User> {
   const data = await apiRequest<ApiMePayload>("/api/me");
-  const tokenUserId = decodeUserIdFromToken(getToken());
-
-  const id = data.userId ?? data.id ?? tokenUserId;
+  const id = data.userId ?? data.id ?? null;
   const role = data.perfil ?? data.role ?? data.appRole ?? "Usuario";
   const permissions = normalizePermissions(data);
 

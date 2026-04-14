@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type EstagioFunil = "NOVO" | "NEGOCIACAO" | "APROVADO" | "CANCELADO";
@@ -139,10 +139,10 @@ function ModalNovoLead({ onClose, onSave }: { onClose: () => void, onSave: (lead
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800 mb-2">
             No primeiro contato, cadastre apenas o básico. Os dados de contrato podem ser preenchidos depois na fase de negociação.
           </div>
-          <Campo label="Nome Completo *" value={form.nome} onChange={(e: any) => setForm({...form, nome: e.target.value})} required />
+          <Campo label="Nome Completo *" value={form.nome} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, nome: e.target.value})} required />
           <div className="grid grid-cols-2 gap-4">
-            <Campo label="Telefone / WhatsApp *" value={form.telefone} onChange={(e: any) => setForm({...form, telefone: e.target.value})} required />
-            <Campo label="E-mail" type="email" value={form.email} onChange={(e: any) => setForm({...form, email: e.target.value})} />
+            <Campo label="Telefone / WhatsApp *" value={form.telefone} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, telefone: e.target.value})} required />
+            <Campo label="E-mail" type="email" value={form.email} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, email: e.target.value})} />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-zinc-700">Curso de Interesse *</label>
@@ -250,7 +250,7 @@ function ModalDetalhesLead({ lead, onClose, onSave, onGerarContrato, onEnviarSec
               <div>
                 <h4 className="text-sm font-bold text-red-800">Devolvido pela Secretaria</h4>
                 <p className="text-sm text-red-700 mt-0.5"><strong>Motivo:</strong> {form.motivoDevolucao}</p>
-                <p className="text-xs text-red-600 mt-1">Corrija o problema (Ex: altere os dados ou reanexe o documento) e clique em "Enviar para Secretaria" novamente.</p>
+                <p className="text-xs text-red-600 mt-1">Corrija o problema (Ex: altere os dados ou reanexe o documento) e clique em &quot;Enviar para Secretaria&quot; novamente.</p>
               </div>
             </div>
           )}
@@ -295,7 +295,7 @@ function ModalDetalhesLead({ lead, onClose, onSave, onGerarContrato, onEnviarSec
               </div>
 
               <div className="grid grid-cols-2 gap-5 bg-white border border-zinc-200 rounded-lg p-5 shadow-sm">
-                <Campo label="Nome Completo" value={form.nome} onChange={(e: any) => setForm({...form, nome: e.target.value})} />
+                <Campo label="Nome Completo" value={form.nome} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, nome: e.target.value})} />
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-zinc-700">Curso de Interesse</label>
                   <select value={form.interesse} onChange={(e) => setForm({...form, interesse: e.target.value})} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] bg-white">
@@ -304,8 +304,8 @@ function ModalDetalhesLead({ lead, onClose, onSave, onGerarContrato, onEnviarSec
                     <option value="Book 3 (Avançado)">Book 3 (Avançado)</option>
                   </select>
                 </div>
-                <Campo label="Telefone / WhatsApp" value={form.telefone} onChange={(e: any) => setForm({...form, telefone: e.target.value})} />
-                <Campo label="E-mail" type="email" value={form.email} onChange={(e: any) => setForm({...form, email: e.target.value})} />
+                <Campo label="Telefone / WhatsApp" value={form.telefone} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, telefone: e.target.value})} />
+                <Campo label="E-mail" type="email" value={form.email} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, email: e.target.value})} />
                 <div className="flex flex-col gap-1.5 col-span-2">
                   <label className="text-sm font-medium text-zinc-700">Anotações do Vendedor</label>
                   <textarea value={form.observacoes} onChange={(e) => setForm({...form, observacoes: e.target.value})} rows={3} className="border border-zinc-300 rounded-lg p-3 text-sm outline-none focus:border-[#1F2A35] resize-none" />
@@ -339,8 +339,8 @@ function ModalDetalhesLead({ lead, onClose, onSave, onGerarContrato, onEnviarSec
 
                     {!form.valoresDiferentes ? (
                       <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-lg border border-zinc-200">
-                        <Campo label="Mensalidade Padrão (R$) *" value={form.valorMensalidade} onChange={(e: any) => setForm({...form, valorMensalidade: e.target.value})} placeholder="Ex: 250,00" />
-                        <Campo label="Material Padrão (R$)" value={form.valorMaterial} onChange={(e: any) => setForm({...form, valorMaterial: e.target.value})} placeholder="Ex: 300,00" />
+                        <Campo label="Mensalidade Padrão (R$) *" value={form.valorMensalidade} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, valorMensalidade: e.target.value})} placeholder="Ex: 250,00" />
+                        <Campo label="Material Padrão (R$)" value={form.valorMaterial} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, valorMaterial: e.target.value})} placeholder="Ex: 300,00" />
                       </div>
                     ) : (
                       <div className="flex flex-col gap-3">
@@ -349,8 +349,8 @@ function ModalDetalhesLead({ lead, onClose, onSave, onGerarContrato, onEnviarSec
                           <div key={i} className="flex gap-4 items-center bg-zinc-50 p-4 rounded-lg border border-zinc-200 shadow-sm">
                             <span className="text-sm font-bold text-[#1F2A35] uppercase w-28 whitespace-nowrap">{i + 1}º Semestre</span>
                             <div className="grid grid-cols-2 gap-4 flex-1">
-                              <Campo label="Mensalidade (R$) *" value={v.mensalidade} onChange={(e: any) => handleValorSemestreChange(i, 'mensalidade', e.target.value)} placeholder="Ex: 250,00" />
-                              <Campo label="Material (R$)" value={v.material} onChange={(e: any) => handleValorSemestreChange(i, 'material', e.target.value)} placeholder="Ex: 300,00" />
+                              <Campo label="Mensalidade (R$) *" value={v.mensalidade} onChange={(e: ChangeEvent<HTMLInputElement>) => handleValorSemestreChange(i, 'mensalidade', e.target.value)} placeholder="Ex: 250,00" />
+                              <Campo label="Material (R$)" value={v.material} onChange={(e: ChangeEvent<HTMLInputElement>) => handleValorSemestreChange(i, 'material', e.target.value)} placeholder="Ex: 300,00" />
                             </div>
                           </div>
                         ))}
@@ -373,20 +373,20 @@ function ModalDetalhesLead({ lead, onClose, onSave, onGerarContrato, onEnviarSec
               <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm">
                 <h3 className="text-sm font-bold text-zinc-800 mb-4 border-b border-zinc-100 pb-2">Documentação do Aluno</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <Campo label="CPF *" value={form.cpf} onChange={(e: any) => setForm({...form, cpf: e.target.value})} placeholder="000.000.000-00" />
-                  <Campo label="RG" value={form.rg} onChange={(e: any) => setForm({...form, rg: e.target.value})} placeholder="00.000.000-0" />
-                  <Campo label="Data Nascimento *" type="date" value={form.dataNascimento} onChange={(e: any) => setForm({...form, dataNascimento: e.target.value})} />
+                  <Campo label="CPF *" value={form.cpf} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, cpf: e.target.value})} placeholder="000.000.000-00" />
+                  <Campo label="RG" value={form.rg} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, rg: e.target.value})} placeholder="00.000.000-0" />
+                  <Campo label="Data Nascimento *" type="date" value={form.dataNascimento} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, dataNascimento: e.target.value})} />
                 </div>
               </div>
 
               <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm">
                 <h3 className="text-sm font-bold text-zinc-800 mb-4 border-b border-zinc-100 pb-2">Endereço Residencial</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="col-span-2 md:col-span-1"><Campo label="CEP *" value={form.cep} onChange={(e: any) => setForm({...form, cep: e.target.value})} placeholder="00000-000" /></div>
-                  <div className="col-span-2 md:col-span-3"><Campo label="Logradouro *" value={form.logradouro} onChange={(e: any) => setForm({...form, logradouro: e.target.value})} placeholder="Rua, Avenida..." /></div>
-                  <div className="col-span-1"><Campo label="Número *" value={form.numero} onChange={(e: any) => setForm({...form, numero: e.target.value})} placeholder="123" /></div>
-                  <div className="col-span-1 md:col-span-1"><Campo label="Bairro *" value={form.bairro} onChange={(e: any) => setForm({...form, bairro: e.target.value})} placeholder="Centro" /></div>
-                  <div className="col-span-2"><Campo label="Cidade *" value={form.cidade} onChange={(e: any) => setForm({...form, cidade: e.target.value})} placeholder="São Paulo - SP" /></div>
+                  <div className="col-span-2 md:col-span-1"><Campo label="CEP *" value={form.cep} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, cep: e.target.value})} placeholder="00000-000" /></div>
+                  <div className="col-span-2 md:col-span-3"><Campo label="Logradouro *" value={form.logradouro} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, logradouro: e.target.value})} placeholder="Rua, Avenida..." /></div>
+                  <div className="col-span-1"><Campo label="Número *" value={form.numero} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, numero: e.target.value})} placeholder="123" /></div>
+                  <div className="col-span-1 md:col-span-1"><Campo label="Bairro *" value={form.bairro} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, bairro: e.target.value})} placeholder="Centro" /></div>
+                  <div className="col-span-2"><Campo label="Cidade *" value={form.cidade} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, cidade: e.target.value})} placeholder="São Paulo - SP" /></div>
                 </div>
               </div>
 
@@ -394,9 +394,9 @@ function ModalDetalhesLead({ lead, onClose, onSave, onGerarContrato, onEnviarSec
                 <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm">
                   <h3 className="text-sm font-bold text-amber-800 mb-4 border-b border-zinc-100 pb-2">Dados do Responsável Financeiro</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <Campo label="Nome do Responsável *" value={form.nomeResponsavel} onChange={(e: any) => setForm({...form, nomeResponsavel: e.target.value})} />
-                    <Campo label="CPF do Responsável *" value={form.cpfResponsavel} onChange={(e: any) => setForm({...form, cpfResponsavel: e.target.value})} placeholder="000.000.000-00" />
-                    <Campo label="Telefone do Responsável *" value={form.telefoneResponsavel} onChange={(e: any) => setForm({...form, telefoneResponsavel: e.target.value})} placeholder="(00) 00000-0000" />
+                    <Campo label="Nome do Responsável *" value={form.nomeResponsavel} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, nomeResponsavel: e.target.value})} />
+                    <Campo label="CPF do Responsável *" value={form.cpfResponsavel} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, cpfResponsavel: e.target.value})} placeholder="000.000.000-00" />
+                    <Campo label="Telefone do Responsável *" value={form.telefoneResponsavel} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({...form, telefoneResponsavel: e.target.value})} placeholder="(00) 00000-0000" />
                   </div>
                 </div>
               )}

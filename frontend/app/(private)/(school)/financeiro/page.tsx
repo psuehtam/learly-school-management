@@ -320,40 +320,6 @@ function ModalContas({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Modal Recebimentos ───────────────────────────────────────────────────────
-function ModalRecebimentos({ onClose }: { onClose: () => void }) {
-  return (
-    <Modal titulo="Recebimentos" onClose={onClose}>
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Campo label="Data inicial" type="date" />
-          <Campo label="Data final"   type="date" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-zinc-700">Conta</label>
-          <select className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition bg-white">
-            <option>Todas as contas</option>
-            <option>Stone (0001 | 1492817-7)</option>
-            <option>Caixa</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-zinc-700">Status</label>
-          <select className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition bg-white">
-            <option>Todos</option>
-            <option>FINALIZADA</option>
-            <option>ESTORNADA</option>
-            <option>PENDENTE</option>
-          </select>
-        </div>
-        <button className="h-10 text-sm font-medium text-white bg-[#1F2A35] rounded-lg hover:bg-[#2d3d4d] transition-colors">
-          Gerar relatório
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
 // ─── Dropdown genérico ────────────────────────────────────────────────────────
 function Dropdown({ label, cor, itens, onSelect }: {
   label: string;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Presenca = "P" | "F" | "R" | null;
@@ -223,8 +222,9 @@ export default function TurmaPage() {
       const novasAulas = [...aulas];
       const aulaAtual = novasAulas[index];
 
+      const nextId = aulas.length > 0 ? Math.max(...aulas.map((a) => a.id)) + 1 : 1;
       const novaAula: Aula = {
-        id: Date.now(),
+        id: nextId,
         data: "", 
         numero: 0, 
         capitulo: aulaAtual.capitulo + " (Cont.)"

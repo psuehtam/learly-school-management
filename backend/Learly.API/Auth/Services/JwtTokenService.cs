@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Learly.API.Auth;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -47,7 +48,7 @@ public sealed class JwtTokenService : IJwtTokenService
             claims.Add(new Claim("role", "SchoolUser"));
         }
 
-        claims.AddRange(user.Permissoes.Select(p => new Claim("permissions", p)));
+        PermissionJwtClaims.AddPermissionClaims(claims, user.Permissoes);
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Key));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

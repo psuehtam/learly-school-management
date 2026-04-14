@@ -12,11 +12,16 @@ public sealed class AuthService : IAuthService
 {
     private readonly IAuthRepository _authRepository;
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly IWebHostEnvironment _environment;
 
-    public AuthService(IAuthRepository authRepository, IJwtTokenService jwtTokenService)
+    public AuthService(
+        IAuthRepository authRepository,
+        IJwtTokenService jwtTokenService,
+        IWebHostEnvironment environment)
     {
         _authRepository = authRepository;
         _jwtTokenService = jwtTokenService;
+        _environment = environment;
     }
 
     public async Task<AuthResult> LoginAsync(LoginRequestDto request)
@@ -33,7 +38,13 @@ public sealed class AuthService : IAuthService
         }
 
         var usuario = loginContext.Usuario;
-        var senhaValida = usuario.Senha.StartsWith("$2", StringComparison.Ordinal)
+        var isBcryptHash = usuario.Senha.StartsWith("$2", StringComparison.Ordinal);
+        if (!isBcryptHash && !_environment.IsDevelopment())
+        {
+            return AuthResult.Fail("Conta com senha legada. Solicite redefinicao de senha.");
+        }
+
+        var senhaValida = isBcryptHash
             ? BCrypt.Net.BCrypt.Verify(request.Senha, usuario.Senha)
             : usuario.Senha == request.Senha;
 
@@ -43,7 +54,7 @@ public sealed class AuthService : IAuthService
         }
 
         // Migra senha legada para hash BCrypt quando necessário.
-        if (!usuario.Senha.StartsWith("$2", StringComparison.Ordinal))
+        if (!isBcryptHash)
         {
             var hash = BCrypt.Net.BCrypt.HashPassword(request.Senha);
             await _authRepository.UpdateSenhaAsync(usuario, hash);
@@ -68,11 +79,10 @@ public sealed class AuthService : IAuthService
         var (token, expiresAtUtc) = _jwtTokenService.GenerateToken(userDto);
         var response = new LoginResponseDto
         {
-            Token = token,
             ExpiraEmUtc = expiresAtUtc,
             Usuario = userDto
         };
 
-        return AuthResult.Ok(response);
+        return AuthResult.Ok(token, response);
     }
 }

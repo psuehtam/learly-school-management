@@ -23,7 +23,12 @@ public sealed class RequirePermissionAttribute : Attribute, IAuthorizationFilter
 
         if (uc.IsSuperAdmin)
         {
-            context.Result = new ObjectResult(new { message = "Super Admin nao pode acessar recursos internos de escola." })
+            context.Result = new ObjectResult(new ProblemDetails
+            {
+                Title = "Acesso negado",
+                Detail = "Super Admin nao pode acessar recursos internos de escola.",
+                Status = StatusCodes.Status403Forbidden
+            })
             {
                 StatusCode = StatusCodes.Status403Forbidden
             };
@@ -35,7 +40,12 @@ public sealed class RequirePermissionAttribute : Attribute, IAuthorizationFilter
         var has = _permissions.Any(p => uc.HasPermission(p));
         if (!has)
         {
-            context.Result = new ObjectResult(new { message = "Permissao insuficiente.", required = _permissions })
+            context.Result = new ObjectResult(new ProblemDetails
+            {
+                Title = "Permissao insuficiente",
+                Detail = $"Permissao necessaria: {string.Join(" ou ", _permissions)}",
+                Status = StatusCodes.Status403Forbidden
+            })
             {
                 StatusCode = StatusCodes.Status403Forbidden
             };

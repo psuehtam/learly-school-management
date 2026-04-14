@@ -1,11 +1,9 @@
-using Audit.EntityFramework;
 using Learly.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Learly.Infrastructure.Data
 {
-    // O segredo está aqui: herdar de AuditDbContext em vez de DbContext!
-    public class LearlyDbContext : AuditDbContext
+    public class LearlyDbContext : DbContext
     {
         public LearlyDbContext(DbContextOptions<LearlyDbContext> options) : base(options) 
         { 

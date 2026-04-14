@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Professor { id: number; nome: string; avatarCor: string; }
@@ -47,8 +46,6 @@ function calcularHeight(inicio: string, fim: string) {
 export default function AgendaGlobalPage() {
   const [dataSelecionada, setDataSelecionada] = useState("2026-03-23"); // Segunda-feira normal
   const [busca, setBusca] = useState("");
-  const [aulaAberta, setAulaAberta] = useState<AulaAgenda | null>(null);
-
   // Verifica se o dia selecionado é um feriado/recesso
   const eventoHoje = feriadosMock.find(f => f.data === dataSelecionada);
 

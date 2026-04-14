@@ -1,4 +1,4 @@
-import { clearToken, getToken } from "@/lib/auth";
+import { clearToken } from "@/lib/auth";
 import type { ApiErrorPayload } from "@/lib/api/types";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -98,13 +98,6 @@ export async function apiRequest<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  if (!options.skipAuth) {
-    const token = getToken();
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-  }
-
   const body =
     options.body == null || isFormData || typeof options.body === "string"
       ? (options.body as BodyInit | undefined)
@@ -114,6 +107,7 @@ export async function apiRequest<T>(
     method: options.method ?? "GET",
     headers,
     body,
+    credentials: "include",
   });
 
   const data = await parseResponseBody(response);

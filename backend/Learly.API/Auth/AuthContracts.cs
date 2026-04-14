@@ -24,7 +24,6 @@ public sealed class LoginUserDto
 
 public sealed class LoginResponseDto
 {
-    public string Token { get; set; } = string.Empty;
     public DateTime ExpiraEmUtc { get; set; }
     public LoginUserDto Usuario { get; set; } = new();
 }
@@ -33,8 +32,11 @@ public sealed class AuthResult
 {
     public bool Success { get; init; }
     public string? Error { get; init; }
+    public string? AccessToken { get; init; }
     public LoginResponseDto? Data { get; init; }
 
-    public static AuthResult Ok(LoginResponseDto data) => new() { Success = true, Data = data };
+    public static AuthResult Ok(string accessToken, LoginResponseDto data) =>
+        new() { Success = true, AccessToken = accessToken, Data = data };
+
     public static AuthResult Fail(string error) => new() { Success = false, Error = error };
 }

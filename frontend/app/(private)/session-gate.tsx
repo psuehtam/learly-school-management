@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getCurrentUser } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
-import { clearToken, getToken, syncAuthScopeFromServer } from "@/lib/auth";
+import { clearToken, hasSessionCookie, saveSessionInfo, syncAuthScopeFromServer } from "@/lib/auth";
 import { canAccessRoute, getHomeRoute } from "@/lib/route-access";
 import type { User } from "@/lib/api/types";
 
@@ -29,8 +29,7 @@ export function SessionGate({ children }: Props) {
     let cancelled = false;
 
     async function run() {
-      const token = getToken();
-      if (!token) {
+      if (!hasSessionCookie()) {
         clearToken();
         const next = encodeURIComponent(`${pathname}${window.location.search}`);
         window.location.assign(`/login?next=${next}`);
@@ -41,7 +40,13 @@ export function SessionGate({ children }: Props) {
         const user = await getCurrentUser();
         if (cancelled) return;
 
-        syncAuthScopeFromServer(Boolean(user.isSuperAdmin));
+        syncAuthScopeFromServer();
+        saveSessionInfo({
+          nome: user.nome,
+          perfil: user.role,
+          email: user.email,
+          isSuperAdmin: Boolean(user.isSuperAdmin),
+        });
 
         if (!canAccessRoute(user, pathname)) {
           setGate({ status: "denied", user });
@@ -60,8 +65,11 @@ export function SessionGate({ children }: Props) {
       }
     }
 
-    setGate({ status: "loading" });
-    void run();
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setGate({ status: "loading" });
+      void run();
+    });
     return () => { cancelled = true; };
   }, [pathname, router]);
 

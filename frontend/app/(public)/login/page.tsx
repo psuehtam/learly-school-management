@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { saveToken } from "@/lib/auth";
+import { saveSessionInfo, setSessionFlagCookie } from "@/lib/auth";
 import { getApiErrorMessage } from "@/lib/api/client";
 import { login } from "@/lib/api/auth";
 import { resolvePostLoginTarget } from "@/lib/post-login-redirect";
@@ -66,16 +66,16 @@ function LoginForm() {
         email,
         senha: password,
       });
-      const token: string | undefined = dados?.token;
       const user = buildUserFromLogin(dados?.usuario);
       const isSuperAdmin = Boolean(user.isSuperAdmin);
-
-      if (!token) {
-        setMensagem("Token nao retornado pelo servidor.");
-        return;
-      }
-
-      saveToken(token, { isSuperAdmin });
+      saveSessionInfo({
+        nome: user.nome,
+        perfil: user.role,
+        email: user.email,
+        isSuperAdmin,
+      });
+      // Garante cookie na origem do Next (proxy); backend também envia auth_session na API.
+      setSessionFlagCookie(dados.expiraEmUtc);
 
       const next = searchParams.get("next");
       const target = resolvePostLoginTarget(user, next);

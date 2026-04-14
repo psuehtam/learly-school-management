@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -111,6 +111,21 @@ function LabelValue({ label, value, whatsapp }: { label: string, value: string, 
 }
 
 // ─── Modais (Mantidos exatamente iguais) ──────────────────────────────────────
+function createDefaultOcorrencia(): Ocorrencia {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    id: d.getTime(),
+    data: d.toISOString().split("T")[0],
+    hora: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    tipo: "Acadêmica",
+    descricao: "",
+    resolucao: "",
+    aulaVinculada: "",
+    autor: "Você (Usuário Logado)",
+  };
+}
+
 function ModalEditarHistorico({ matricula, onClose, onSave }: { matricula: HistoricoMatricula, onClose: () => void, onSave: (m: HistoricoMatricula) => void }) {
   const [form, setForm] = useState<HistoricoMatricula>(matricula);
   return (
@@ -126,7 +141,7 @@ function ModalEditarHistorico({ matricula, onClose, onSave }: { matricula: Histo
           <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-zinc-700">Turma</label><input type="text" value={form.turma} onChange={(e) => setForm({ ...form, turma: e.target.value })} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] transition" /></div>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-zinc-700">Situação</label>
-            <select value={form.situacao} onChange={(e) => setForm({ ...form, situacao: e.target.value as any })} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] transition bg-white">
+            <select value={form.situacao} onChange={(e) => setForm({ ...form, situacao: e.target.value as HistoricoMatricula["situacao"] })} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] transition bg-white">
               <option value="ATIVO">ATIVO</option><option value="CANCELADO">CANCELADO</option><option value="CONCLUÍDO">CONCLUÍDO</option><option value="TRANCADO">TRANCADO</option>
             </select>
           </div>
@@ -141,9 +156,7 @@ function ModalEditarHistorico({ matricula, onClose, onSave }: { matricula: Histo
 }
 
 function ModalOcorrencia({ ocorrencia, onClose, onSave }: { ocorrencia?: Ocorrencia | null, onClose: () => void, onSave: (o: Ocorrencia) => void }) {
-  const [form, setForm] = useState<Ocorrencia>(
-    ocorrencia || { id: Date.now(), data: new Date().toISOString().split('T')[0], hora: new Date().toTimeString().split(':')[0] + ":" + new Date().toTimeString().split(':')[1], tipo: "Acadêmica", descricao: "", resolucao: "", aulaVinculada: "", autor: "Você (Usuário Logado)" }
-  );
+  const [form, setForm] = useState<Ocorrencia>(() => ocorrencia ?? createDefaultOcorrencia());
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 flex flex-col max-h-[95vh]">
@@ -155,7 +168,7 @@ function ModalOcorrencia({ ocorrencia, onClose, onSave }: { ocorrencia?: Ocorren
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-zinc-700">Data *</label><input type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] transition" /></div>
             <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-zinc-700">Hora *</label><input type="time" value={form.hora} onChange={(e) => setForm({ ...form, hora: e.target.value })} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] transition" /></div>
-            <div className="flex flex-col gap-1.5 col-span-2 md:col-span-1"><label className="text-sm font-medium text-zinc-700">Tipo *</label><select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value as any })} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] transition bg-white"><option value="Acadêmica">Acadêmica</option><option value="Administrativa">Administrativa</option></select></div>
+            <div className="flex flex-col gap-1.5 col-span-2 md:col-span-1"><label className="text-sm font-medium text-zinc-700">Tipo *</label><select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value as Ocorrencia["tipo"] })} className="h-10 border border-zinc-300 rounded-lg px-3 text-sm outline-none focus:border-[#1F2A35] transition bg-white"><option value="Acadêmica">Acadêmica</option><option value="Administrativa">Administrativa</option></select></div>
           </div>
           <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-zinc-700">Descrição da Ocorrência *</label><textarea value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} placeholder="Descreva o que aconteceu de forma clara e objetiva..." className="h-24 border border-zinc-300 rounded-lg p-3 text-sm outline-none focus:border-[#1F2A35] transition resize-none" /></div>
           <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-zinc-700">Resolução / Encaminhamento (Opcional)</label><textarea value={form.resolucao} onChange={(e) => setForm({ ...form, resolucao: e.target.value })} placeholder="Qual medida foi adotada? Houve orientação?" className="h-20 border border-zinc-300 rounded-lg p-3 text-sm outline-none focus:border-[#1F2A35] transition resize-none" /></div>
@@ -176,7 +189,7 @@ function ModalAnexarDocumento({ onClose, onSave }: { onClose: () => void, onSave
   const [arquivo, setArquivo] = useState<File | null>(null);
   function handleSave() {
     if (!nome || !tipo || !arquivo) return;
-    let tamanhoFmt = arquivo.size < 1024 * 1024 ? (arquivo.size / 1024).toFixed(1) + " KB" : (arquivo.size / (1024 * 1024)).toFixed(1) + " MB";
+    const tamanhoFmt = arquivo.size < 1024 * 1024 ? (arquivo.size / 1024).toFixed(1) + " KB" : (arquivo.size / (1024 * 1024)).toFixed(1) + " MB";
     onSave({ id: Date.now(), nome, tipo, dataEnvio: new Date().toLocaleDateString('pt-BR'), tamanho: tamanhoFmt, autor: "Você (Usuário Logado)" });
   }
   return (

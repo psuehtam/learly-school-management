@@ -14,14 +14,24 @@ public sealed class SchoolUserOnlyAttribute : Attribute, IAuthorizationFilter
         var uc = context.HttpContext.GetUserContext();
         if (uc.IsSuperAdmin)
         {
-            context.Result = new ObjectResult(new { message = "Super Admin nao pode acessar recursos internos de escola." })
+            context.Result = new ObjectResult(new ProblemDetails
+            {
+                Title = "Acesso negado",
+                Detail = "Super Admin nao pode acessar recursos internos de escola.",
+                Status = StatusCodes.Status403Forbidden
+            })
             {
                 StatusCode = StatusCodes.Status403Forbidden
             };
         }
         else if (string.IsNullOrWhiteSpace(uc.CodigoEscola))
         {
-            context.Result = new ObjectResult(new { message = "Usuario sem escola vinculada." })
+            context.Result = new ObjectResult(new ProblemDetails
+            {
+                Title = "Acesso negado",
+                Detail = "Usuario sem escola vinculada.",
+                Status = StatusCodes.Status403Forbidden
+            })
             {
                 StatusCode = StatusCodes.Status403Forbidden
             };

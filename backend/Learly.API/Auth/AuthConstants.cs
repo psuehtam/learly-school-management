@@ -8,6 +8,7 @@ public static class AuthConstants
 {
     public const string SystemSchoolCode = "SYSTEM";
     public const string SuperAdminProfileName = "Super Admin";
+    public const string AccessTokenCookieName = "learly_access_token";
 
     public static bool IsSystemSuperAdmin(string? escolaCodigo, string perfilNome) =>
         string.Equals(escolaCodigo, SystemSchoolCode, StringComparison.OrdinalIgnoreCase)

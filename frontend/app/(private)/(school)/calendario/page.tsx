@@ -237,7 +237,7 @@ export default function CalendarioPage() {
               <li className="flex gap-2"><span className="font-semibold text-zinc-700">1.</span> Selecione o tipo de evento ao lado</li>
               <li className="flex gap-2"><span className="font-semibold text-zinc-700">2.</span> Clique nos dias do calendário para marcar</li>
               <li className="flex gap-2"><span className="font-semibold text-zinc-700">3.</span> Clique novamente para remover a marcação</li>
-              <li className="flex gap-2"><span className="font-semibold text-zinc-700">4.</span> Clique em "Aplicar alterações" para salvar</li>
+              <li className="flex gap-2"><span className="font-semibold text-zinc-700">4.</span> Clique em &quot;Aplicar alterações&quot; para salvar</li>
             </ol>
           </div>
 

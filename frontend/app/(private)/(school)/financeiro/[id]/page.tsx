@@ -19,6 +19,8 @@ interface Parcela {
   status: StatusParcela;
 }
 
+type DadosBaixaPorParcela = Record<number, { data: string; valor: number; forma: string; conta: string }>;
+
 // ─── Mock ─────────────────────────────────────────────────────────────────────
 const alunoInfo = {
   nome: "RONALD XAVIER DE ABREU",
@@ -110,11 +112,11 @@ function ModalNovaParcela({ onClose }: { onClose: () => void }) {
 }
 
 // ─── Modal Dar Baixa ──────────────────────────────────────────────────────────
-function ModalDarBaixa({ parcelas, idsSelecionados, onClose, onConfirmar }: { parcelas: Parcela[], idsSelecionados: number[], onClose: () => void, onConfirmar: (dados: any) => void }) {
+function ModalDarBaixa({ parcelas, idsSelecionados, onClose, onConfirmar }: { parcelas: Parcela[], idsSelecionados: number[], onClose: () => void, onConfirmar: (dados: DadosBaixaPorParcela) => void }) {
   const parcelasAtivas = parcelas.filter(p => idsSelecionados.includes(p.id));
 
   const [dadosBaixa, setDadosBaixa] = useState(() => {
-    const initialState: Record<number, { data: string, valor: number, forma: string, conta: string }> = {};
+    const initialState: DadosBaixaPorParcela = {};
     const hoje = new Date().toISOString().split('T')[0];
     parcelasAtivas.forEach(p => {
       initialState[p.id] = { data: hoje, valor: p.vlrDevido !== null ? p.vlrDevido : p.vlrTitulo, forma: "", conta: "" };
@@ -409,7 +411,7 @@ export default function FinanceiroAlunoPage() {
     setParcelas(prev => prev.map(p => p.id === parcelaEditada.id ? parcelaEditada : p));
   }
 
-  function processarBaixa(dadosBaixa: Record<number, { data: string, valor: number, forma: string, conta: string }>) {
+  function processarBaixa(dadosBaixa: DadosBaixaPorParcela) {
     setParcelas(prev => prev.map(p => {
       if (dadosBaixa[p.id]) {
         const recebidoAgora = dadosBaixa[p.id].valor;

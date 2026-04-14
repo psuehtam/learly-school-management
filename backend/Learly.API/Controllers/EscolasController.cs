@@ -1,10 +1,9 @@
 using Learly.API.Auth;
 using Learly.API.Auth.Filters;
-using Learly.Domain.Entities;
-using Learly.Infrastructure.Data;
+using Learly.Application.Services.Common;
+using Learly.Application.Services.Escolas;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace Learly.API.Controllers;
 
@@ -13,11 +12,11 @@ namespace Learly.API.Controllers;
 [Authorize]
 public sealed class EscolasController : ControllerBase
 {
-    private readonly LearlyDbContext _db;
+    private readonly IEscolasService _escolasService;
 
-    public EscolasController(LearlyDbContext db)
+    public EscolasController(IEscolasService escolasService)
     {
-        _db = db;
+        _escolasService = escolasService;
     }
 
     /// <summary>
@@ -26,31 +25,26 @@ public sealed class EscolasController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Listar(CancellationToken ct)
     {
-        var query = _db.Escolas.AsNoTracking().Where(e => e.Status == "Ativo");
-
-        if (IsSuperAdmin())
+        var rawUserContext = this.GetUserContext();
+        if (!rawUserContext.IsSuperAdmin &&
+            !rawUserContext.HasPermission("VISUALIZAR_ESCOLAS") &&
+            !rawUserContext.HasPermission("GERENCIAR_ESCOLAS"))
         {
-            var todas = await query
-                .Where(e => e.CodigoEscola != AuthConstants.SystemSchoolCode)
-                .OrderBy(e => e.CodigoEscola)
-                .Select(e => new EscolaListItemDto(e.Id, e.CodigoEscola, e.NomeFantasia, e.Status))
-                .ToListAsync(ct);
-            return Ok(todas);
+            return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
+            {
+                Title = "Permissao insuficiente",
+                Detail = "Permissao necessaria: VISUALIZAR_ESCOLAS ou GERENCIAR_ESCOLAS",
+                Status = StatusCodes.Status403Forbidden
+            });
         }
 
-        var codigo = User.FindFirst("codigoEscola")?.Value;
-        if (string.IsNullOrWhiteSpace(codigo))
+        var uc = ToAppUserContext(rawUserContext);
+        var escolas = await _escolasService.ListarAsync(uc, ct);
+        if (!uc.IsSuperAdmin && string.IsNullOrWhiteSpace(uc.CodigoEscola))
         {
             return Forbid();
         }
-
-        var uma = await query
-            .Where(e => e.CodigoEscola == codigo)
-            .OrderBy(e => e.CodigoEscola)
-            .Select(e => new EscolaListItemDto(e.Id, e.CodigoEscola, e.NomeFantasia, e.Status))
-            .ToListAsync(ct);
-
-        return Ok(uma);
+        return Ok(escolas);
     }
 
     /// <summary>Apenas Super Admin pode criar escolas (novo tenant).</summary>
@@ -58,46 +52,45 @@ public sealed class EscolasController : ControllerBase
     [SuperAdminOnly]
     public async Task<IActionResult> Criar([FromBody] CriarEscolaRequest body, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(body.CodigoEscola) || string.IsNullOrWhiteSpace(body.NomeFantasia))
+        var result = await _escolasService.CriarAsync(new CriarEscolaInput
         {
-            return BadRequest(new { message = "CodigoEscola e NomeFantasia sao obrigatorios." });
+            CodigoEscola = body.CodigoEscola,
+            NomeFantasia = body.NomeFantasia,
+            RazaoSocial = body.RazaoSocial,
+            Cnpj = body.Cnpj
+        }, ct);
+        if (!result.Success || result.Escola is null)
+        {
+            var isConflict = string.Equals(result.Error, "Ja existe escola com este codigo.", StringComparison.Ordinal);
+            if (isConflict)
+            {
+                return Conflict(new ProblemDetails
+                {
+                    Title = "Conflito",
+                    Detail = result.Error,
+                    Status = StatusCodes.Status409Conflict
+                });
+            }
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = result.Error ?? "Falha ao criar escola.",
+                Status = StatusCodes.Status400BadRequest
+            });
         }
 
-        var codigo = body.CodigoEscola.Trim().ToUpperInvariant();
-        if (string.Equals(codigo, AuthConstants.SystemSchoolCode, StringComparison.OrdinalIgnoreCase))
-        {
-            return BadRequest(new { message = "Codigo reservado ao sistema." });
-        }
-
-        if (await _db.Escolas.AnyAsync(e => e.CodigoEscola == codigo, ct))
-        {
-            return Conflict(new { message = "Ja existe escola com este codigo." });
-        }
-
-        var entidade = new Escola
-        {
-            CodigoEscola = codigo,
-            NomeFantasia = body.NomeFantasia.Trim(),
-            RazaoSocial = string.IsNullOrWhiteSpace(body.RazaoSocial) ? null : body.RazaoSocial.Trim(),
-            Cnpj = string.IsNullOrWhiteSpace(body.Cnpj) ? null : body.Cnpj.Trim(),
-            Status = "Ativo"
-        };
-
-        _db.Escolas.Add(entidade);
-        await _db.SaveChangesAsync(ct);
-
-        var dto = new EscolaListItemDto(
-            entidade.Id,
-            entidade.CodigoEscola,
-            entidade.NomeFantasia,
-            entidade.Status);
-        return StatusCode(StatusCodes.Status201Created, dto);
+        return StatusCode(StatusCodes.Status201Created, result.Escola);
     }
 
-    private bool IsSuperAdmin() => this.GetUserContext().IsSuperAdmin;
+    private static AppUserContext ToAppUserContext(UserContext uc) => new()
+    {
+        UserId = uc.UserId,
+        Perfil = uc.Perfil,
+        CodigoEscola = uc.CodigoEscola,
+        IsSuperAdmin = uc.IsSuperAdmin,
+        Permissions = uc.Permissions
+    };
 }
-
-public sealed record EscolaListItemDto(int Id, string CodigoEscola, string NomeFantasia, string Status);
 
 public sealed class CriarEscolaRequest
 {

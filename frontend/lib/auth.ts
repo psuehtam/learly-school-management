@@ -20,7 +20,7 @@ export function hasSessionCookie(): boolean {
   return document.cookie.split(";").some((c) => c.trim() === `${AUTH_SESSION_KEY}=1`);
 }
 
-/** Marca sessão na origem do Next (middleware / hasSessionCookie). Chamar após login bem-sucedido. */
+/** Marca sessão na origem do Next (proxy / hasSessionCookie). Chamar após login bem-sucedido. */
 export function setSessionFlagCookie(expiresAtUtc?: string): void {
   if (typeof window === "undefined") return;
   let maxAge = 60 * 60 * 24 * 7;

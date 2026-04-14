@@ -74,7 +74,7 @@ function LoginForm() {
         email: user.email,
         isSuperAdmin,
       });
-      // Garante cookie na origem do Next (middleware); backend também envia auth_session na API.
+      // Garante cookie na origem do Next (proxy); backend também envia auth_session na API.
       setSessionFlagCookie(dados.expiraEmUtc);
 
       const next = searchParams.get("next");

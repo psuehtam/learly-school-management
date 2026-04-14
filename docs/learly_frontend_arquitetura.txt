@@ -535,14 +535,12 @@ frontend/
     │   ├── comercial.ts
     │   └── api.ts                             # ApiResponse<T>, PaginatedResponse<T>
     │
-    └── middleware.ts
-        # FUNÇÕES:
-        # - Intercepta todas as rotas do Next.js
-        # - Rotas (public)/*: sem verificação
-        # - Rotas (super-admin)/*: verifica is_super_admin no JWT
-        # - Rotas (auth)/*: verifica JWT válido + escola ativa
-        # - Redireciona para /login se não autenticado
-        # - Redireciona para /dashboard se autenticado tentando acessar /login
+    └── proxy.ts
+        # FUNÇÕES (Next 16+; antes middleware.ts):
+        # - Intercepta rotas conforme matcher; checa cookie auth_session=1
+        # - Rotas privadas sem sessão → /login?next=
+        # - /login com sessão → /
+        # - Permissões finas: SessionGate + GET /api/me no backend
 
 
 # ─────────────────────────────────────────────────────────────

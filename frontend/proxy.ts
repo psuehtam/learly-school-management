@@ -29,12 +29,12 @@ function isPrivatePath(pathname: string): boolean {
 }
 
 /**
- * Intercepta pedidos antes de chegarem às rotas:
+ * Intercepta pedidos antes de chegarem às rotas (Next 16+: convenção `proxy`).
  * - rotas privadas sem sessão (`auth_session`) → redireciona para `/login` (com `?next=`);
  * - `/login` com sessão → redireciona para `/`.
  * Segurança real de permissões ocorre no backend e na validação de `GET /api/me` no SessionGate.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = request.cookies.get("auth_session")?.value;
   const hasSession = session === "1";

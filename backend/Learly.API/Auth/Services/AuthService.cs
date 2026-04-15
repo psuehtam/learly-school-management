@@ -41,7 +41,7 @@ public sealed class AuthService : IAuthService
         var isBcryptHash = usuario.Senha.StartsWith("$2", StringComparison.Ordinal);
         if (!isBcryptHash && !_environment.IsDevelopment())
         {
-            return AuthResult.Fail("Conta com senha legada. Solicite redefinicao de senha.");
+            return AuthResult.Fail("Credenciais invalidas.");
         }
 
         var senhaValida = isBcryptHash

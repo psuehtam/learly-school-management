@@ -12,5 +12,5 @@ public static class AuthConstants
 
     public static bool IsSystemSuperAdmin(string? escolaCodigo, string perfilNome) =>
         string.Equals(escolaCodigo, SystemSchoolCode, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(perfilNome, SuperAdminProfileName, StringComparison.Ordinal);
+        && string.Equals(perfilNome, SuperAdminProfileName, StringComparison.OrdinalIgnoreCase);
 }

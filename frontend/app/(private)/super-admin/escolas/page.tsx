@@ -9,26 +9,40 @@ function ModalNovaEscola({
   onSave,
 }: {
   onClose: () => void;
-  onSave: (d: { codigoEscola: string; nomeFantasia: string; razaoSocial?: string; cnpj?: string }) => Promise<void>;
+  onSave: (d: {
+    codigoEscola: string;
+    nomeFantasia: string;
+    razaoSocial?: string;
+    cnpj?: string;
+    adminNomeCompleto?: string;
+    adminEmail: string;
+    adminPassword: string;
+  }) => Promise<void>;
 }) {
   const [codigoEscola, setCodigoEscola] = useState("");
   const [nomeFantasia, setNomeFantasia] = useState("");
   const [razaoSocial, setRazaoSocial] = useState("");
   const [cnpj, setCnpj] = useState("");
+  const [adminNomeCompleto, setAdminNomeCompleto] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [erro, setErro] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!codigoEscola.trim() || !nomeFantasia.trim()) return;
+    if (!codigoEscola.trim() || !nomeFantasia.trim() || !adminEmail.trim() || !adminPassword.trim()) return;
     setSubmitting(true);
     setErro("");
     try {
       await onSave({
-      codigoEscola: codigoEscola.trim().toUpperCase(),
-      nomeFantasia: nomeFantasia.trim(),
-      razaoSocial: razaoSocial.trim() || undefined,
-      cnpj: cnpj.trim() || undefined,
+        codigoEscola: codigoEscola.trim().toUpperCase(),
+        nomeFantasia: nomeFantasia.trim(),
+        razaoSocial: razaoSocial.trim() || undefined,
+        cnpj: cnpj.trim() || undefined,
+        adminNomeCompleto: adminNomeCompleto.trim() || undefined,
+        adminEmail: adminEmail.trim().toLowerCase(),
+        adminPassword,
       });
       onClose();
     } catch (e) {
@@ -95,6 +109,43 @@ function ModalNovaEscola({
               placeholder="Opcional"
             />
           </div>
+          <div className="pt-2 border-t border-zinc-100">
+            <h3 className="text-sm font-semibold text-zinc-800">Administrador da escola</h3>
+            <p className="text-xs text-zinc-500 mt-1">
+              Esse usuario sera criado automaticamente e podera fazer login com o codigo da escola.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Nome completo do admin</label>
+            <input
+              value={adminNomeCompleto}
+              onChange={(e) => setAdminNomeCompleto(e.target.value)}
+              className="h-10 border border-zinc-300 rounded-lg px-3 text-sm"
+              placeholder="Opcional (padrao: Administrador + escola)"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Email do admin *</label>
+            <input
+              type="email"
+              value={adminEmail}
+              onChange={(e) => setAdminEmail(e.target.value)}
+              className="h-10 border border-zinc-300 rounded-lg px-3 text-sm"
+              placeholder="admin@escola.com"
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Senha do admin *</label>
+            <input
+              type="password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              className="h-10 border border-zinc-300 rounded-lg px-3 text-sm"
+              placeholder="Min. 8, com maiuscula, minuscula e numero"
+              required
+            />
+          </div>
           {erro && (
             <p className="text-xs text-red-600">{erro}</p>
           )}
@@ -151,7 +202,15 @@ export default function SuperAdminEscolasPage() {
       e.nomeFantasia.toLowerCase().includes(filtro.toLowerCase())
   );
 
-  async function adicionarEscola(d: { codigoEscola: string; nomeFantasia: string; razaoSocial?: string; cnpj?: string }) {
+  async function adicionarEscola(d: {
+    codigoEscola: string;
+    nomeFantasia: string;
+    razaoSocial?: string;
+    cnpj?: string;
+    adminNomeCompleto?: string;
+    adminEmail: string;
+    adminPassword: string;
+  }) {
     const nova = await criarEscola(d);
     setEscolas((prev) => [nova, ...prev]);
   }

@@ -94,10 +94,7 @@ public sealed class AulasController : ControllerBase
         }, uc, ct);
         if (!result.Success)
         {
-            if (result.StatusCode == StatusCodes.Status404NotFound)
-                return NotFound(new ProblemDetails { Title = "Nao encontrado", Detail = result.Error, Status = result.StatusCode });
-            if (result.StatusCode == StatusCodes.Status403Forbidden)
-                return StatusCode(result.StatusCode, new ProblemDetails { Title = "Acesso negado", Detail = result.Error, Status = result.StatusCode });
+            return BuildFailureResult(result.StatusCode, result.Error, "Falha ao editar aula.");
         }
         return NoContent();
     }
@@ -110,12 +107,28 @@ public sealed class AulasController : ControllerBase
         var result = await _aulasService.CancelarAsync(id, uc, ct);
         if (!result.Success)
         {
-            if (result.StatusCode == StatusCodes.Status404NotFound)
-                return NotFound(new ProblemDetails { Title = "Nao encontrado", Detail = result.Error, Status = result.StatusCode });
-            if (result.StatusCode == StatusCodes.Status403Forbidden)
-                return StatusCode(result.StatusCode, new ProblemDetails { Title = "Acesso negado", Detail = result.Error, Status = result.StatusCode });
+            return BuildFailureResult(result.StatusCode, result.Error, "Falha ao cancelar aula.");
         }
         return NoContent();
+    }
+
+    private ObjectResult BuildFailureResult(int statusCode, string? detail, string fallbackDetail)
+    {
+        var normalizedStatus = statusCode is >= 400 and <= 599 ? statusCode : StatusCodes.Status400BadRequest;
+        var title = normalizedStatus switch
+        {
+            StatusCodes.Status403Forbidden => "Acesso negado",
+            StatusCodes.Status404NotFound => "Nao encontrado",
+            StatusCodes.Status409Conflict => "Conflito",
+            _ => "Requisicao invalida"
+        };
+
+        return StatusCode(normalizedStatus, new ProblemDetails
+        {
+            Title = title,
+            Detail = detail ?? fallbackDetail,
+            Status = normalizedStatus
+        });
     }
 
     private static AppUserContext ToAppUserContext(UserContext uc) => new()

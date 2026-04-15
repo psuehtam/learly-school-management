@@ -57,11 +57,16 @@ public sealed class EscolasController : ControllerBase
             CodigoEscola = body.CodigoEscola,
             NomeFantasia = body.NomeFantasia,
             RazaoSocial = body.RazaoSocial,
-            Cnpj = body.Cnpj
+            Cnpj = body.Cnpj,
+            AdminNomeCompleto = body.AdminNomeCompleto,
+            AdminEmail = body.AdminEmail,
+            AdminPassword = body.AdminPassword
         }, ct);
         if (!result.Success || result.Escola is null)
         {
-            var isConflict = string.Equals(result.Error, "Ja existe escola com este codigo.", StringComparison.Ordinal);
+            var isConflict =
+                string.Equals(result.Error, "Ja existe escola com este codigo.", StringComparison.Ordinal) ||
+                string.Equals(result.Error, "Ja existe usuario com este email.", StringComparison.Ordinal);
             if (isConflict)
             {
                 return Conflict(new ProblemDetails
@@ -98,4 +103,7 @@ public sealed class CriarEscolaRequest
     public string NomeFantasia { get; set; } = string.Empty;
     public string? RazaoSocial { get; set; }
     public string? Cnpj { get; set; }
+    public string? AdminNomeCompleto { get; set; }
+    public string AdminEmail { get; set; } = string.Empty;
+    public string AdminPassword { get; set; } = string.Empty;
 }

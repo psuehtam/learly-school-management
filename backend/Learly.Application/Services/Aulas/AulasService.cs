@@ -55,6 +55,12 @@ public interface IAulasService
 public sealed class AulasService : IAulasService
 {
     private readonly LearlyDbContext _db;
+    private static readonly HashSet<string> ValidStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Agendada",
+        "Realizada",
+        "Cancelada"
+    };
 
     public AulasService(LearlyDbContext db)
     {
@@ -63,8 +69,14 @@ public sealed class AulasService : IAulasService
 
     public async Task<IReadOnlyList<AulaListItemDto>> ListarAsync(AppUserContext uc, CancellationToken ct)
     {
+        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
+        if (!escolaId.HasValue)
+        {
+            return [];
+        }
+
         var query = _db.Aulas.AsNoTracking()
-            .Where(a => _db.Escolas.Any(e => e.Id == a.EscolaId && e.CodigoEscola == uc.CodigoEscola));
+            .Where(a => a.EscolaId == escolaId.Value);
 
         if (IsProfessor(uc))
         {
@@ -80,9 +92,15 @@ public sealed class AulasService : IAulasService
 
     public async Task<AulaListItemDto?> ObterPorIdAsync(int id, AppUserContext uc, CancellationToken ct)
     {
+        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
+        if (!escolaId.HasValue)
+        {
+            return null;
+        }
+
         var query = _db.Aulas.AsNoTracking()
             .Where(a => a.Id == id)
-            .Where(a => _db.Escolas.Any(e => e.Id == a.EscolaId && e.CodigoEscola == uc.CodigoEscola));
+            .Where(a => a.EscolaId == escolaId.Value);
 
         if (IsProfessor(uc))
         {
@@ -94,19 +112,33 @@ public sealed class AulasService : IAulasService
 
     public async Task<(bool Success, int? Id, string? Error)> CriarAsync(CriarAulaInput input, AppUserContext uc, CancellationToken ct)
     {
-        var escola = await _db.Escolas.AsNoTracking()
-            .FirstOrDefaultAsync(e => e.CodigoEscola == uc.CodigoEscola && e.Status == "Ativo", ct);
-        if (escola is null) return (false, null, "Acesso negado.");
+        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
+        if (!escolaId.HasValue) return (false, null, "Acesso negado.");
+
+        if (input.NumeroAula <= 0)
+        {
+            return (false, null, "Numero da aula deve ser maior que zero.");
+        }
+
+        if (input.HorarioFim <= input.HorarioInicio)
+        {
+            return (false, null, "Horario fim deve ser maior que horario inicio.");
+        }
 
         var turma = await _db.Turmas.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == input.TurmaId && t.EscolaId == escola.Id, ct);
+            .FirstOrDefaultAsync(t => t.Id == input.TurmaId && t.EscolaId == escolaId.Value, ct);
         if (turma is null) return (false, null, "Turma nao encontrada nesta escola.");
 
         var professorId = input.ProfessorId ?? uc.UserId;
+        var professorValido = await IsProfessorAtSchoolAsync(professorId, escolaId.Value, ct);
+        if (!professorValido)
+        {
+            return (false, null, "Professor invalido para esta escola.");
+        }
 
         var entidade = new Aula
         {
-            EscolaId = escola.Id,
+            EscolaId = escolaId.Value,
             TurmaId = input.TurmaId,
             CapituloId = input.CapituloId,
             ProfessorId = professorId,
@@ -126,15 +158,41 @@ public sealed class AulasService : IAulasService
 
     public async Task<(bool Success, string? Error, int StatusCode)> EditarAsync(int id, EditarAulaInput input, AppUserContext uc, CancellationToken ct)
     {
+        if (IsProfessor(uc))
+        {
+            return (false, "Professor nao pode editar aulas.", 403);
+        }
+
+        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
+        if (!escolaId.HasValue) return (false, "Acesso negado.", 403);
+
         var aula = await _db.Aulas
             .Where(a => a.Id == id)
-            .Where(a => _db.Escolas.Any(e => e.Id == a.EscolaId && e.CodigoEscola == uc.CodigoEscola))
+            .Where(a => a.EscolaId == escolaId.Value)
             .FirstOrDefaultAsync(ct);
         if (aula is null) return (false, "Aula nao encontrada.", 404);
 
-        if (IsProfessor(uc) && aula.ProfessorId != uc.UserId)
+        var horarioInicio = input.HorarioInicio ?? aula.HorarioInicio;
+        var horarioFim = input.HorarioFim ?? aula.HorarioFim;
+        if (horarioFim <= horarioInicio)
         {
-            return (false, "Voce so pode editar suas proprias aulas.", 403);
+            return (false, "Horario fim deve ser maior que horario inicio.", 400);
+        }
+
+        if (input.Status is not null)
+        {
+            var normalizedStatus = input.Status.Trim();
+            if (!ValidStatuses.Contains(normalizedStatus))
+            {
+                return (false, "Status da aula invalido.", 400);
+            }
+
+            if (!CanTransition(aula.Status, normalizedStatus))
+            {
+                return (false, "Transicao de status nao permitida.", 409);
+            }
+
+            aula.Status = normalizedStatus;
         }
 
         if (input.CapituloId.HasValue) aula.CapituloId = input.CapituloId.Value;
@@ -142,7 +200,6 @@ public sealed class AulasService : IAulasService
         if (input.HorarioInicio.HasValue) aula.HorarioInicio = input.HorarioInicio.Value;
         if (input.HorarioFim.HasValue) aula.HorarioFim = input.HorarioFim.Value;
         if (input.ConteudoDado is not null) aula.ConteudoDado = input.ConteudoDado;
-        if (input.Status is not null) aula.Status = input.Status;
 
         await _db.SaveChangesAsync(ct);
         return (true, null, 204);
@@ -150,15 +207,23 @@ public sealed class AulasService : IAulasService
 
     public async Task<(bool Success, string? Error, int StatusCode)> CancelarAsync(int id, AppUserContext uc, CancellationToken ct)
     {
+        if (IsProfessor(uc))
+        {
+            return (false, "Professor nao pode cancelar aulas.", 403);
+        }
+
+        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
+        if (!escolaId.HasValue) return (false, "Acesso negado.", 403);
+
         var aula = await _db.Aulas
             .Where(a => a.Id == id)
-            .Where(a => _db.Escolas.Any(e => e.Id == a.EscolaId && e.CodigoEscola == uc.CodigoEscola))
+            .Where(a => a.EscolaId == escolaId.Value)
             .FirstOrDefaultAsync(ct);
         if (aula is null) return (false, "Aula nao encontrada.", 404);
 
-        if (IsProfessor(uc) && aula.ProfessorId != uc.UserId)
+        if (!CanTransition(aula.Status, "Cancelada"))
         {
-            return (false, "Voce so pode cancelar suas proprias aulas.", 403);
+            return (false, "Transicao de status nao permitida.", 409);
         }
 
         aula.Status = "Cancelada";
@@ -168,6 +233,48 @@ public sealed class AulasService : IAulasService
 
     private static bool IsProfessor(AppUserContext uc) =>
         string.Equals(uc.Perfil, "Professor", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<int?> GetActiveSchoolIdAsync(string? codigoEscola, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(codigoEscola))
+        {
+            return null;
+        }
+
+        return await _db.Escolas.AsNoTracking()
+            .Where(e => e.CodigoEscola == codigoEscola && e.Status == "Ativo")
+            .Select(e => (int?)e.Id)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    private async Task<bool> IsProfessorAtSchoolAsync(int usuarioId, int escolaId, CancellationToken ct)
+    {
+        return await _db.Usuarios.AsNoTracking()
+            .Where(u => u.Id == usuarioId && u.EscolaId == escolaId && u.Status == "Ativo")
+            .Join(
+                _db.Perfis.AsNoTracking(),
+                u => new { u.PerfilId, u.EscolaId },
+                p => new { PerfilId = p.Id, p.EscolaId },
+                (_, p) => p.Nome)
+            .AnyAsync(nome => string.Equals(nome, "Professor", StringComparison.OrdinalIgnoreCase), ct);
+    }
+
+    private static bool CanTransition(string currentStatus, string nextStatus)
+    {
+        if (string.Equals(currentStatus, nextStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return currentStatus.ToLowerInvariant() switch
+        {
+            "agendada" => string.Equals(nextStatus, "Realizada", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(nextStatus, "Cancelada", StringComparison.OrdinalIgnoreCase),
+            "realizada" => false,
+            "cancelada" => false,
+            _ => false
+        };
+    }
 
     private static Expression<Func<Aula, AulaListItemDto>> ToDto() =>
         a => new AulaListItemDto

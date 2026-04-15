@@ -31,9 +31,10 @@ public sealed class AuthController : ControllerBase
             });
         }
 
-        // Secure=true em http:// faz o navegador ignorar ou não enviar o cookie → 401 em /api/me.
-        // Em produção (HTTPS) mantém Secure; em dev (http://localhost) usa false.
-        var secure = Request.IsHttps;
+        // Em produção/staging o cookie deve sempre sair com Secure=true.
+        // Em desenvolvimento local sem HTTPS, permite Secure=false para fluxo localhost.
+        var env = HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>();
+        var secure = !env.IsDevelopment() || Request.IsHttps;
         var expires = result.Data.ExpiraEmUtc;
 
         Response.Cookies.Append(AuthConstants.AccessTokenCookieName, result.AccessToken, new CookieOptions

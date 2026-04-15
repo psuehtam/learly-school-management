@@ -12,6 +12,9 @@ export type CriarEscolaPayload = {
   nomeFantasia: string;
   razaoSocial?: string;
   cnpj?: string;
+  adminNomeCompleto?: string;
+  adminEmail: string;
+  adminPassword: string;
 };
 
 export async function listarEscolas(): Promise<Escola[]> {

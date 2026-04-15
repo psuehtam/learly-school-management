@@ -34,7 +34,7 @@ No terminal, execute:
 No terminal principal:
 
 ```
-dotnet run --project "backend\Learly.API\Learly.API.csproj"
+dotnet run --project "Learly.API.csproj"
 ```
 
 5. RODAR O FRONTEND
@@ -53,3 +53,18 @@ npm run dev
 - O projeto já inclui Audit.NET no backend para auditoria automática com Entity Framework.
 - Se precisar instalar dependências .NET manualmente, use `dotnet restore` na pasta principal do backend.
 - Se precisar instalar dependências de frontend, use `npm install` em `frontend` antes de `npm run dev`.
+
+
+comandos 
+
+--BACKEND--
+
+cd backend\Learly.API
+dotnet restore
+dotnet run --project "Learly.API.csproj"
+
+
+--FRONTEND--
+cd frontend
+npm install
+npm run dev

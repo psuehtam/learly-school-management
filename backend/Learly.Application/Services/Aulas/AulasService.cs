@@ -1,265 +1,224 @@
+using Learly.Application.Contracts.Aulas;
+using Learly.Application.Contracts.Aulas.Requests;
+using Learly.Application.Contracts.Aulas.Responses;
 using Learly.Application.Services.Common;
 using Learly.Domain.Entities;
-using Learly.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
+using Learly.Domain.Interfaces.Persistence;
+using Learly.Domain.Interfaces.Repositories;
+using MapsterMapper;
 
 namespace Learly.Application.Services.Aulas;
 
-public sealed class AulaListItemDto
-{
-    public int Id { get; init; }
-    public int TurmaId { get; init; }
-    public int ProfessorId { get; init; }
-    public int NumeroAula { get; init; }
-    public DateOnly DataAula { get; init; }
-    public TimeOnly HorarioInicio { get; init; }
-    public TimeOnly HorarioFim { get; init; }
-    public string? ConteudoDado { get; init; }
-    public string TipoAula { get; init; } = "Normal";
-    public string Status { get; init; } = "Agendada";
-}
-
-public sealed class CriarAulaInput
-{
-    public int TurmaId { get; set; }
-    public int? CapituloId { get; set; }
-    public int? ProfessorId { get; set; }
-    public int NumeroAula { get; set; }
-    public DateOnly DataAula { get; set; }
-    public TimeOnly HorarioInicio { get; set; }
-    public TimeOnly HorarioFim { get; set; }
-    public string? ConteudoDado { get; set; }
-    public string? TipoAula { get; set; }
-}
-
-public sealed class EditarAulaInput
-{
-    public int? CapituloId { get; set; }
-    public DateOnly? DataAula { get; set; }
-    public TimeOnly? HorarioInicio { get; set; }
-    public TimeOnly? HorarioFim { get; set; }
-    public string? ConteudoDado { get; set; }
-    public string? Status { get; set; }
-}
-
-public interface IAulasService
-{
-    Task<IReadOnlyList<AulaListItemDto>> ListarAsync(AppUserContext uc, CancellationToken ct);
-    Task<AulaListItemDto?> ObterPorIdAsync(int id, AppUserContext uc, CancellationToken ct);
-    Task<(bool Success, int? Id, string? Error)> CriarAsync(CriarAulaInput input, AppUserContext uc, CancellationToken ct);
-    Task<(bool Success, string? Error, int StatusCode)> EditarAsync(int id, EditarAulaInput input, AppUserContext uc, CancellationToken ct);
-    Task<(bool Success, string? Error, int StatusCode)> CancelarAsync(int id, AppUserContext uc, CancellationToken ct);
-}
-
 public sealed class AulasService : IAulasService
 {
-    private readonly LearlyDbContext _db;
-    private static readonly HashSet<string> ValidStatuses = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> StatusValidos = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Agendada",
-        "Realizada",
-        "Cancelada"
+        Aula.Estados.Agendada,
+        Aula.Estados.Realizada,
+        Aula.Estados.Cancelada
     };
 
-    public AulasService(LearlyDbContext db)
+    private readonly IAulaRepository _aulas;
+    private readonly IEscolaRepository _escolas;
+    private readonly ITurmaRepository _turmas;
+    private readonly IUsuarioRepository _usuarios;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+
+    public AulasService(
+        IAulaRepository aulas,
+        IEscolaRepository escolas,
+        ITurmaRepository turmas,
+        IUsuarioRepository usuarios,
+        IUnitOfWork unitOfWork,
+        IMapper mapper)
     {
-        _db = db;
+        _aulas = aulas;
+        _escolas = escolas;
+        _turmas = turmas;
+        _usuarios = usuarios;
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
     }
 
-    public async Task<IReadOnlyList<AulaListItemDto>> ListarAsync(AppUserContext uc, CancellationToken ct)
+    public async Task<IReadOnlyList<AulaListItemResponse>> ListarAsync(
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
     {
-        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
+        var escolaId = await ObterIdEscolaAtivaPorCodigoAsync(uc.CodigoEscola, cancellationToken);
         if (!escolaId.HasValue)
         {
             return [];
         }
 
-        var query = _db.Aulas.AsNoTracking()
-            .Where(a => a.EscolaId == escolaId.Value);
+        var filtroProfessor = EhProfessor(uc) ? uc.UserId : (int?)null;
+        var entidades = await _aulas.ListarPorEscolaEFiltroProfessorAsync(
+            escolaId.Value,
+            filtroProfessor,
+            cancellationToken);
 
-        if (IsProfessor(uc))
-        {
-            query = query.Where(a => a.ProfessorId == uc.UserId);
-        }
-
-        return await query
-            .OrderByDescending(a => a.DataAula)
-            .ThenBy(a => a.HorarioInicio)
-            .Select(ToDto())
-            .ToListAsync(ct);
+        return entidades.Select(a => _mapper.Map<AulaListItemResponse>(a)).ToList();
     }
 
-    public async Task<AulaListItemDto?> ObterPorIdAsync(int id, AppUserContext uc, CancellationToken ct)
+    public async Task<AulaListItemResponse?> ObterPorIdAsync(
+        int id,
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
     {
-        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
+        var escolaId = await ObterIdEscolaAtivaPorCodigoAsync(uc.CodigoEscola, cancellationToken);
         if (!escolaId.HasValue)
         {
             return null;
         }
 
-        var query = _db.Aulas.AsNoTracking()
-            .Where(a => a.Id == id)
-            .Where(a => a.EscolaId == escolaId.Value);
-
-        if (IsProfessor(uc))
-        {
-            query = query.Where(a => a.ProfessorId == uc.UserId);
-        }
-
-        return await query.Select(ToDto()).FirstOrDefaultAsync(ct);
+        var filtroProfessor = EhProfessor(uc) ? uc.UserId : (int?)null;
+        var entidade = await _aulas.ObterSemRastreioPorIdEEscolaAsync(id, escolaId.Value, filtroProfessor, cancellationToken);
+        return entidade is null ? null : _mapper.Map<AulaListItemResponse>(entidade);
     }
 
-    public async Task<(bool Success, int? Id, string? Error)> CriarAsync(CriarAulaInput input, AppUserContext uc, CancellationToken ct)
+    public async Task<AulaCriacaoResultado> CriarAsync(
+        CriarAulaRequest request,
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
     {
-        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
-        if (!escolaId.HasValue) return (false, null, "Acesso negado.");
-
-        if (input.NumeroAula <= 0)
+        var escolaId = await ObterIdEscolaAtivaPorCodigoAsync(uc.CodigoEscola, cancellationToken);
+        if (!escolaId.HasValue)
         {
-            return (false, null, "Numero da aula deve ser maior que zero.");
+            return new AulaCriacaoResultado(false, null, "Acesso negado.", AulaCriacaoFalha.AcessoNegado);
         }
 
-        if (input.HorarioFim <= input.HorarioInicio)
+        if (request.NumeroAula <= 0)
         {
-            return (false, null, "Horario fim deve ser maior que horario inicio.");
+            return new AulaCriacaoResultado(false, null, "Numero da aula deve ser maior que zero.", AulaCriacaoFalha.Validacao);
         }
 
-        var turma = await _db.Turmas.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == input.TurmaId && t.EscolaId == escolaId.Value, ct);
-        if (turma is null) return (false, null, "Turma nao encontrada nesta escola.");
+        if (request.HorarioFim <= request.HorarioInicio)
+        {
+            return new AulaCriacaoResultado(false, null, "Horario fim deve ser maior que horario inicio.", AulaCriacaoFalha.Validacao);
+        }
 
-        var professorId = input.ProfessorId ?? uc.UserId;
-        var professorValido = await IsProfessorAtSchoolAsync(professorId, escolaId.Value, ct);
+        var turma = await _turmas.ObterPorIdEEscolaAsync(request.TurmaId, escolaId.Value, cancellationToken);
+        if (turma is null)
+        {
+            return new AulaCriacaoResultado(false, null, "Turma nao encontrada nesta escola.", AulaCriacaoFalha.Validacao);
+        }
+
+        var professorId = request.ProfessorId ?? uc.UserId;
+        var professorValido = await _usuarios.ProfessorAtivoNaEscolaAsync(professorId, escolaId.Value, cancellationToken);
         if (!professorValido)
         {
-            return (false, null, "Professor invalido para esta escola.");
+            return new AulaCriacaoResultado(false, null, "Professor invalido para esta escola.", AulaCriacaoFalha.Validacao);
         }
 
-        var entidade = new Aula
-        {
-            EscolaId = escolaId.Value,
-            TurmaId = input.TurmaId,
-            CapituloId = input.CapituloId,
-            ProfessorId = professorId,
-            NumeroAula = input.NumeroAula,
-            DataAula = input.DataAula,
-            HorarioInicio = input.HorarioInicio,
-            HorarioFim = input.HorarioFim,
-            ConteudoDado = input.ConteudoDado,
-            TipoAula = input.TipoAula ?? "Normal",
-            Status = "Agendada",
-        };
+        var entidade = _mapper.Map<Aula>(request);
+        entidade.EscolaId = escolaId.Value;
+        entidade.ProfessorId = professorId;
+        entidade.Status = Aula.Estados.Agendada;
 
-        _db.Aulas.Add(entidade);
-        await _db.SaveChangesAsync(ct);
-        return (true, entidade.Id, null);
+        _aulas.Adicionar(entidade);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return new AulaCriacaoResultado(true, entidade.Id, null, AulaCriacaoFalha.Nenhuma);
     }
 
-    public async Task<(bool Success, string? Error, int StatusCode)> EditarAsync(int id, EditarAulaInput input, AppUserContext uc, CancellationToken ct)
+    public async Task<AulaOperacaoResultado> EditarAsync(
+        int id,
+        EditarAulaRequest request,
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
     {
-        if (IsProfessor(uc))
+        if (EhProfessor(uc))
         {
-            return (false, "Professor nao pode editar aulas.", 403);
+            return new AulaOperacaoResultado(false, "Professor nao pode editar aulas.", 403);
         }
 
-        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
-        if (!escolaId.HasValue) return (false, "Acesso negado.", 403);
+        var escolaId = await ObterIdEscolaAtivaPorCodigoAsync(uc.CodigoEscola, cancellationToken);
+        if (!escolaId.HasValue)
+        {
+            return new AulaOperacaoResultado(false, "Acesso negado.", 403);
+        }
 
-        var aula = await _db.Aulas
-            .Where(a => a.Id == id)
-            .Where(a => a.EscolaId == escolaId.Value)
-            .FirstOrDefaultAsync(ct);
-        if (aula is null) return (false, "Aula nao encontrada.", 404);
+        var aula = await _aulas.ObterRastreadaPorIdEEscolaAsync(id, escolaId.Value, cancellationToken);
+        if (aula is null)
+        {
+            return new AulaOperacaoResultado(false, "Aula nao encontrada.", 404);
+        }
 
-        var horarioInicio = input.HorarioInicio ?? aula.HorarioInicio;
-        var horarioFim = input.HorarioFim ?? aula.HorarioFim;
+        var horarioInicio = request.HorarioInicio ?? aula.HorarioInicio;
+        var horarioFim = request.HorarioFim ?? aula.HorarioFim;
         if (horarioFim <= horarioInicio)
         {
-            return (false, "Horario fim deve ser maior que horario inicio.", 400);
+            return new AulaOperacaoResultado(false, "Horario fim deve ser maior que horario inicio.", 400);
         }
 
-        if (input.Status is not null)
+        if (request.Status is not null)
         {
-            var normalizedStatus = input.Status.Trim();
-            if (!ValidStatuses.Contains(normalizedStatus))
+            var normalizedStatus = request.Status.Trim();
+            if (!StatusValidos.Contains(normalizedStatus))
             {
-                return (false, "Status da aula invalido.", 400);
+                return new AulaOperacaoResultado(false, "Status da aula invalido.", 400);
             }
 
-            if (!CanTransition(aula.Status, normalizedStatus))
+            if (!PodeTransicionar(aula.Status, normalizedStatus))
             {
-                return (false, "Transicao de status nao permitida.", 409);
+                return new AulaOperacaoResultado(false, "Transicao de status nao permitida.", 409);
             }
 
             aula.Status = normalizedStatus;
         }
 
-        if (input.CapituloId.HasValue) aula.CapituloId = input.CapituloId.Value;
-        if (input.DataAula.HasValue) aula.DataAula = input.DataAula.Value;
-        if (input.HorarioInicio.HasValue) aula.HorarioInicio = input.HorarioInicio.Value;
-        if (input.HorarioFim.HasValue) aula.HorarioFim = input.HorarioFim.Value;
-        if (input.ConteudoDado is not null) aula.ConteudoDado = input.ConteudoDado;
+        if (request.CapituloId.HasValue) aula.CapituloId = request.CapituloId.Value;
+        if (request.DataAula.HasValue) aula.DataAula = request.DataAula.Value;
+        if (request.HorarioInicio.HasValue) aula.HorarioInicio = request.HorarioInicio.Value;
+        if (request.HorarioFim.HasValue) aula.HorarioFim = request.HorarioFim.Value;
+        if (request.ConteudoDado is not null) aula.ConteudoDado = request.ConteudoDado;
 
-        await _db.SaveChangesAsync(ct);
-        return (true, null, 204);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return new AulaOperacaoResultado(true, null, 204);
     }
 
-    public async Task<(bool Success, string? Error, int StatusCode)> CancelarAsync(int id, AppUserContext uc, CancellationToken ct)
+    public async Task<AulaOperacaoResultado> CancelarAsync(int id, AppUserContext uc, CancellationToken cancellationToken = default)
     {
-        if (IsProfessor(uc))
+        if (EhProfessor(uc))
         {
-            return (false, "Professor nao pode cancelar aulas.", 403);
+            return new AulaOperacaoResultado(false, "Professor nao pode cancelar aulas.", 403);
         }
 
-        var escolaId = await GetActiveSchoolIdAsync(uc.CodigoEscola, ct);
-        if (!escolaId.HasValue) return (false, "Acesso negado.", 403);
-
-        var aula = await _db.Aulas
-            .Where(a => a.Id == id)
-            .Where(a => a.EscolaId == escolaId.Value)
-            .FirstOrDefaultAsync(ct);
-        if (aula is null) return (false, "Aula nao encontrada.", 404);
-
-        if (!CanTransition(aula.Status, "Cancelada"))
+        var escolaId = await ObterIdEscolaAtivaPorCodigoAsync(uc.CodigoEscola, cancellationToken);
+        if (!escolaId.HasValue)
         {
-            return (false, "Transicao de status nao permitida.", 409);
+            return new AulaOperacaoResultado(false, "Acesso negado.", 403);
         }
 
-        aula.Status = "Cancelada";
-        await _db.SaveChangesAsync(ct);
-        return (true, null, 204);
+        var aula = await _aulas.ObterRastreadaPorIdEEscolaAsync(id, escolaId.Value, cancellationToken);
+        if (aula is null)
+        {
+            return new AulaOperacaoResultado(false, "Aula nao encontrada.", 404);
+        }
+
+        if (!PodeTransicionar(aula.Status, Aula.Estados.Cancelada))
+        {
+            return new AulaOperacaoResultado(false, "Transicao de status nao permitida.", 409);
+        }
+
+        aula.Status = Aula.Estados.Cancelada;
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return new AulaOperacaoResultado(true, null, 204);
     }
 
-    private static bool IsProfessor(AppUserContext uc) =>
+    private static bool EhProfessor(AppUserContext uc) =>
         string.Equals(uc.Perfil, "Professor", StringComparison.OrdinalIgnoreCase);
 
-    private async Task<int?> GetActiveSchoolIdAsync(string? codigoEscola, CancellationToken ct)
+    private Task<int?> ObterIdEscolaAtivaPorCodigoAsync(string? codigoEscola, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(codigoEscola))
         {
-            return null;
+            return Task.FromResult<int?>(null);
         }
 
-        return await _db.Escolas.AsNoTracking()
-            .Where(e => e.CodigoEscola == codigoEscola && e.Status == "Ativo")
-            .Select(e => (int?)e.Id)
-            .FirstOrDefaultAsync(ct);
+        return _escolas.ObterIdAtivaPorCodigoEscolaAsync(codigoEscola, cancellationToken);
     }
 
-    private async Task<bool> IsProfessorAtSchoolAsync(int usuarioId, int escolaId, CancellationToken ct)
-    {
-        return await _db.Usuarios.AsNoTracking()
-            .Where(u => u.Id == usuarioId && u.EscolaId == escolaId && u.Status == "Ativo")
-            .Join(
-                _db.Perfis.AsNoTracking(),
-                u => new { u.PerfilId, u.EscolaId },
-                p => new { PerfilId = p.Id, p.EscolaId },
-                (_, p) => p.Nome)
-            .AnyAsync(nome => string.Equals(nome, "Professor", StringComparison.OrdinalIgnoreCase), ct);
-    }
-
-    private static bool CanTransition(string currentStatus, string nextStatus)
+    private static bool PodeTransicionar(string currentStatus, string nextStatus)
     {
         if (string.Equals(currentStatus, nextStatus, StringComparison.OrdinalIgnoreCase))
         {
@@ -268,26 +227,11 @@ public sealed class AulasService : IAulasService
 
         return currentStatus.ToLowerInvariant() switch
         {
-            "agendada" => string.Equals(nextStatus, "Realizada", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(nextStatus, "Cancelada", StringComparison.OrdinalIgnoreCase),
+            "agendada" => string.Equals(nextStatus, Aula.Estados.Realizada, StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(nextStatus, Aula.Estados.Cancelada, StringComparison.OrdinalIgnoreCase),
             "realizada" => false,
             "cancelada" => false,
             _ => false
         };
     }
-
-    private static Expression<Func<Aula, AulaListItemDto>> ToDto() =>
-        a => new AulaListItemDto
-        {
-            Id = a.Id,
-            TurmaId = a.TurmaId,
-            ProfessorId = a.ProfessorId,
-            NumeroAula = a.NumeroAula,
-            DataAula = a.DataAula,
-            HorarioInicio = a.HorarioInicio,
-            HorarioFim = a.HorarioFim,
-            ConteudoDado = a.ConteudoDado,
-            TipoAula = a.TipoAula,
-            Status = a.Status
-        };
 }

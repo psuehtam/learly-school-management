@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Learly.Infrastructure", "ba
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Learly.API.Tests", "backend\Learly.API.Tests\Learly.API.Tests.csproj", "{31CF2595-ABF4-473D-9057-C79763FA243E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Learly.Worker", "backend\Learly.Worker\Learly.Worker.csproj", "{25ED2755-5E00-47AA-B65F-04CDA5767266}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,6 +87,18 @@ Global
 		{31CF2595-ABF4-473D-9057-C79763FA243E}.Release|x64.Build.0 = Release|Any CPU
 		{31CF2595-ABF4-473D-9057-C79763FA243E}.Release|x86.ActiveCfg = Release|Any CPU
 		{31CF2595-ABF4-473D-9057-C79763FA243E}.Release|x86.Build.0 = Release|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Debug|x64.Build.0 = Debug|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Debug|x86.Build.0 = Debug|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Release|Any CPU.Build.0 = Release|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Release|x64.ActiveCfg = Release|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Release|x64.Build.0 = Release|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Release|x86.ActiveCfg = Release|Any CPU
+		{25ED2755-5E00-47AA-B65F-04CDA5767266}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -95,6 +109,7 @@ Global
 		{C2B40C07-EBA8-BBDC-6C10-B7938A5EE8B8} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
 		{A77281CB-AFF8-CA80-25E0-1A4C035D293F} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
 		{31CF2595-ABF4-473D-9057-C79763FA243E} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
+		{25ED2755-5E00-47AA-B65F-04CDA5767266} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {090E4607-3544-49A8-B14D-FC6559C2D1E5}

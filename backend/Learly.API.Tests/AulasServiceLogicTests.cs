@@ -1,8 +1,12 @@
+using Learly.Application;
+using Learly.Application.Contracts.Aulas.Requests;
 using Learly.Application.Services.Aulas;
 using Learly.Application.Services.Common;
 using Learly.Domain.Entities;
+using Learly.Infrastructure;
 using Learly.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Learly.API.Tests;
@@ -14,10 +18,12 @@ public sealed class AulasServiceLogicTests
     {
         await using var db = BuildContext();
         SeedBasicSchoolData(db, escolaAtiva: true);
-        var service = new AulasService(db);
+        using var root = BuildServiceProvider(db);
+        using var scope = root.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAulasService>();
         var uc = BuildUserContext(userId: 2, perfil: "Professor");
 
-        var result = await service.CriarAsync(new CriarAulaInput
+        var result = await service.CriarAsync(new CriarAulaRequest
         {
             TurmaId = 1,
             NumeroAula = 0,
@@ -26,8 +32,8 @@ public sealed class AulasServiceLogicTests
             HorarioFim = new TimeOnly(9, 0)
         }, uc, CancellationToken.None);
 
-        Assert.False(result.Success);
-        Assert.Equal("Numero da aula deve ser maior que zero.", result.Error);
+        Assert.False(result.Ok);
+        Assert.Equal("Numero da aula deve ser maior que zero.", result.Mensagem);
     }
 
     [Fact]
@@ -35,10 +41,12 @@ public sealed class AulasServiceLogicTests
     {
         await using var db = BuildContext();
         SeedBasicSchoolData(db, escolaAtiva: true);
-        var service = new AulasService(db);
+        using var root = BuildServiceProvider(db);
+        using var scope = root.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAulasService>();
         var uc = BuildUserContext(userId: 3, perfil: "Administrador");
 
-        var result = await service.CriarAsync(new CriarAulaInput
+        var result = await service.CriarAsync(new CriarAulaRequest
         {
             TurmaId = 1,
             NumeroAula = 1,
@@ -47,8 +55,8 @@ public sealed class AulasServiceLogicTests
             HorarioFim = new TimeOnly(9, 0)
         }, uc, CancellationToken.None);
 
-        Assert.False(result.Success);
-        Assert.Equal("Professor invalido para esta escola.", result.Error);
+        Assert.False(result.Ok);
+        Assert.Equal("Professor invalido para esta escola.", result.Mensagem);
     }
 
     [Fact]
@@ -57,17 +65,19 @@ public sealed class AulasServiceLogicTests
         await using var db = BuildContext();
         SeedBasicSchoolData(db, escolaAtiva: true);
         SeedAula(db, status: "Agendada", professorId: 2);
-        var service = new AulasService(db);
+        using var root = BuildServiceProvider(db);
+        using var scope = root.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAulasService>();
         var uc = BuildUserContext(userId: 3, perfil: "Administrador");
 
-        var result = await service.EditarAsync(1, new EditarAulaInput
+        var result = await service.EditarAsync(1, new EditarAulaRequest
         {
             Status = "STATUS_QUEBRADO"
         }, uc, CancellationToken.None);
 
-        Assert.False(result.Success);
+        Assert.False(result.Ok);
         Assert.Equal(400, result.StatusCode);
-        Assert.Equal("Status da aula invalido.", result.Error);
+        Assert.Equal("Status da aula invalido.", result.Mensagem);
     }
 
     [Fact]
@@ -76,14 +86,16 @@ public sealed class AulasServiceLogicTests
         await using var db = BuildContext();
         SeedBasicSchoolData(db, escolaAtiva: true);
         SeedAula(db, status: "Realizada", professorId: 2);
-        var service = new AulasService(db);
+        using var root = BuildServiceProvider(db);
+        using var scope = root.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAulasService>();
         var uc = BuildUserContext(userId: 3, perfil: "Administrador");
 
         var result = await service.CancelarAsync(1, uc, CancellationToken.None);
 
-        Assert.False(result.Success);
+        Assert.False(result.Ok);
         Assert.Equal(409, result.StatusCode);
-        Assert.Equal("Transicao de status nao permitida.", result.Error);
+        Assert.Equal("Transicao de status nao permitida.", result.Mensagem);
     }
 
     [Fact]
@@ -92,23 +104,25 @@ public sealed class AulasServiceLogicTests
         await using var db = BuildContext();
         SeedBasicSchoolData(db, escolaAtiva: true);
         SeedAula(db, status: "Agendada", professorId: 2);
-        var service = new AulasService(db);
+        using var root = BuildServiceProvider(db);
+        using var scope = root.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAulasService>();
         var ucProfessor = BuildUserContext(userId: 2, perfil: "Professor");
 
-        var editar = await service.EditarAsync(1, new EditarAulaInput
+        var editar = await service.EditarAsync(1, new EditarAulaRequest
         {
             Status = "Realizada"
         }, ucProfessor, CancellationToken.None);
 
         var cancelar = await service.CancelarAsync(1, ucProfessor, CancellationToken.None);
 
-        Assert.False(editar.Success);
+        Assert.False(editar.Ok);
         Assert.Equal(403, editar.StatusCode);
-        Assert.Equal("Professor nao pode editar aulas.", editar.Error);
+        Assert.Equal("Professor nao pode editar aulas.", editar.Mensagem);
 
-        Assert.False(cancelar.Success);
+        Assert.False(cancelar.Ok);
         Assert.Equal(403, cancelar.StatusCode);
-        Assert.Equal("Professor nao pode cancelar aulas.", cancelar.Error);
+        Assert.Equal("Professor nao pode cancelar aulas.", cancelar.Mensagem);
     }
 
     [Fact]
@@ -117,7 +131,9 @@ public sealed class AulasServiceLogicTests
         await using var db = BuildContext();
         SeedBasicSchoolData(db, escolaAtiva: false);
         SeedAula(db, status: "Agendada", professorId: 2);
-        var service = new AulasService(db);
+        using var root = BuildServiceProvider(db);
+        using var scope = root.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAulasService>();
         var uc = BuildUserContext(userId: 2, perfil: "Professor");
 
         var result = await service.ListarAsync(uc, CancellationToken.None);
@@ -131,6 +147,16 @@ public sealed class AulasServiceLogicTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
         return new LearlyDbContext(options);
+    }
+
+    private static ServiceProvider BuildServiceProvider(LearlyDbContext db)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(db);
+        services.AddScoped<LearlyDbContext>(_ => db);
+        services.AddLearlyRepositories();
+        services.AddLearlyApplication();
+        return services.BuildServiceProvider();
     }
 
     private static AppUserContext BuildUserContext(int userId, string perfil)

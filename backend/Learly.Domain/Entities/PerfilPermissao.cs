@@ -1,14 +1,30 @@
-using System.ComponentModel.DataAnnotations.Schema;
+using Learly.Domain.Exceptions;
 
-namespace Learly.Domain.Entities
+namespace Learly.Domain.Entities;
+
+public sealed class PerfilPermissao
 {
-    [Table("perfil_permissoes")]
-    public class PerfilPermissao
-    {
-        [Column("perfil_id")]
-        public int PerfilId { get; set; }
+    private int _perfilId;
 
-        [Column("permissao_id")]
-        public int PermissaoId { get; set; }
+    public int PerfilId
+    {
+        get => _perfilId;
+        internal set => _perfilId = ValidarId(value, nameof(PerfilId));
+    }
+
+    private int _permissaoId;
+
+    public int PermissaoId
+    {
+        get => _permissaoId;
+        internal set => _permissaoId = ValidarId(value, nameof(PermissaoId));
+    }
+
+    private static int ValidarId(int value, string nomeCampo)
+    {
+        if (value <= 0)
+            throw new DomainException($"{nomeCampo} deve ser maior que zero.");
+
+        return value;
     }
 }

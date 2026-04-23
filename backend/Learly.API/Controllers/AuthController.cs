@@ -10,10 +10,12 @@ namespace Learly.API.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly IWebHostEnvironment _environment;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, IWebHostEnvironment environment)
     {
         _authService = authService;
+        _environment = environment;
     }
 
     [HttpPost("login")]
@@ -31,10 +33,7 @@ public sealed class AuthController : ControllerBase
             });
         }
 
-        // Em produção/staging o cookie deve sempre sair com Secure=true.
-        // Em desenvolvimento local sem HTTPS, permite Secure=false para fluxo localhost.
-        var env = HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>();
-        var secure = !env.IsDevelopment() || Request.IsHttps;
+        var secure = !_environment.IsDevelopment() || Request.IsHttps;
         var expires = result.Data.ExpiraEmUtc;
 
         Response.Cookies.Append(AuthConstants.AccessTokenCookieName, result.AccessToken, new CookieOptions

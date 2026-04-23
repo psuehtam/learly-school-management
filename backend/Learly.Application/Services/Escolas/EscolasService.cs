@@ -1,183 +1,173 @@
-using Learly.Domain.Entities;
+using Learly.Application.Contracts.Escolas;
+using Learly.Application.Contracts.Escolas.Requests;
+using Learly.Application.Contracts.Escolas.Responses;
 using Learly.Application.Services.Common;
-using Learly.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using Learly.Domain.Entities;
+using Learly.Domain.Interfaces.Persistence;
+using Learly.Domain.Interfaces.Repositories;
+using MapsterMapper;
 
 namespace Learly.Application.Services.Escolas;
 
-public sealed record EscolaListItemDto(int Id, string CodigoEscola, string NomeFantasia, string Status);
-
-public sealed class CriarEscolaInput
-{
-    public string CodigoEscola { get; set; } = string.Empty;
-    public string NomeFantasia { get; set; } = string.Empty;
-    public string? RazaoSocial { get; set; }
-    public string? Cnpj { get; set; }
-    public string? AdminNomeCompleto { get; set; }
-    public string AdminEmail { get; set; } = string.Empty;
-    public string AdminPassword { get; set; } = string.Empty;
-}
-
-public interface IEscolasService
-{
-    Task<IReadOnlyList<EscolaListItemDto>> ListarAsync(AppUserContext userContext, CancellationToken ct);
-    Task<(bool Success, string? Error, EscolaListItemDto? Escola)> CriarAsync(CriarEscolaInput input, CancellationToken ct);
-}
-
 public sealed class EscolasService : IEscolasService
 {
-    private readonly LearlyDbContext _db;
     private const string AdminPerfilNome = "Administrador";
+    private const string PermissaoExcluirDasPadroesAdmin = "GERENCIAR_ESCOLAS";
 
-    public EscolasService(LearlyDbContext db)
+    private readonly IEscolaRepository _escolas;
+    private readonly IUsuarioRepository _usuarios;
+    private readonly IPerfilRepository _perfis;
+    private readonly IPermissaoRepository _permissoes;
+    private readonly IPerfilPermissaoRepository _perfilPermissoes;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+
+    public EscolasService(
+        IEscolaRepository escolas,
+        IUsuarioRepository usuarios,
+        IPerfilRepository perfis,
+        IPermissaoRepository permissoes,
+        IPerfilPermissaoRepository perfilPermissoes,
+        IUnitOfWork unitOfWork,
+        IMapper mapper)
     {
-        _db = db;
+        _escolas = escolas;
+        _usuarios = usuarios;
+        _perfis = perfis;
+        _permissoes = permissoes;
+        _perfilPermissoes = perfilPermissoes;
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
     }
 
-    public async Task<IReadOnlyList<EscolaListItemDto>> ListarAsync(AppUserContext userContext, CancellationToken ct)
+    public async Task<EscolasListagemResultado> ListarAsync(
+        AppUserContext userContext,
+        CancellationToken cancellationToken = default)
     {
-        var query = _db.Escolas.AsNoTracking().Where(e => e.Status == "Ativo");
-        if (userContext.IsSuperAdmin)
+        if (!userContext.IsSuperAdmin && string.IsNullOrWhiteSpace(userContext.CodigoEscola))
         {
-            return await query
-                .Where(e => e.CodigoEscola != "SYSTEM")
-                .OrderBy(e => e.CodigoEscola)
-                .Select(e => new EscolaListItemDto(e.Id, e.CodigoEscola, e.NomeFantasia, e.Status))
-                .ToListAsync(ct);
+            return new EscolasListagemResultado([], ContextoTenantInvalido: true);
         }
 
-        if (string.IsNullOrWhiteSpace(userContext.CodigoEscola))
-        {
-            return [];
-        }
+        IReadOnlyList<Escola> entidades = userContext.IsSuperAdmin
+            ? await _escolas.ListarAtivasNaoSistemaOrdenadasPorCodigoAsync(cancellationToken)
+            : await _escolas.ListarAtivasPorCodigoEscolaAsync(userContext.CodigoEscola!, cancellationToken);
 
-        return await query
-            .Where(e => e.CodigoEscola == userContext.CodigoEscola)
-            .OrderBy(e => e.CodigoEscola)
-            .Select(e => new EscolaListItemDto(e.Id, e.CodigoEscola, e.NomeFantasia, e.Status))
-            .ToListAsync(ct);
+        var itens = entidades.Select(e => _mapper.Map<EscolaListItemResponse>(e)).ToList();
+        return new EscolasListagemResultado(itens, ContextoTenantInvalido: false);
     }
 
-    public async Task<(bool Success, string? Error, EscolaListItemDto? Escola)> CriarAsync(CriarEscolaInput input, CancellationToken ct)
+    public async Task<EscolaCriacaoResultado> CriarAsync(CriarEscolaRequest request, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(input.CodigoEscola) || string.IsNullOrWhiteSpace(input.NomeFantasia))
+        if (string.IsNullOrWhiteSpace(request.CodigoEscola) || string.IsNullOrWhiteSpace(request.NomeFantasia))
         {
-            return (false, "CodigoEscola e NomeFantasia sao obrigatorios.", null);
-        }
-        if (string.IsNullOrWhiteSpace(input.AdminEmail) || string.IsNullOrWhiteSpace(input.AdminPassword))
-        {
-            return (false, "AdminEmail e AdminPassword sao obrigatorios.", null);
-        }
-        if (!IsValidPassword(input.AdminPassword))
-        {
-            return (false, "AdminPassword deve ter ao menos 8 caracteres, com letra maiuscula, minuscula e numero.", null);
+            return new EscolaCriacaoResultado(false, null, "CodigoEscola e NomeFantasia sao obrigatorios.", EscolaCriacaoFalha.Validacao);
         }
 
-        var codigo = input.CodigoEscola.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(request.AdminEmail) || string.IsNullOrWhiteSpace(request.AdminPassword))
+        {
+            return new EscolaCriacaoResultado(false, null, "AdminEmail e AdminPassword sao obrigatorios.", EscolaCriacaoFalha.Validacao);
+        }
+
+        if (!SenhaValida(request.AdminPassword))
+        {
+            return new EscolaCriacaoResultado(false, null, "AdminPassword deve ter ao menos 8 caracteres, com letra maiuscula, minuscula e numero.", EscolaCriacaoFalha.Validacao);
+        }
+
+        var codigo = request.CodigoEscola.Trim().ToUpperInvariant();
         if (string.Equals(codigo, "SYSTEM", StringComparison.OrdinalIgnoreCase))
         {
-            return (false, "Codigo reservado ao sistema.", null);
+            return new EscolaCriacaoResultado(false, null, "Codigo reservado ao sistema.", EscolaCriacaoFalha.CodigoReservado);
         }
 
-        if (await _db.Escolas.AnyAsync(e => e.CodigoEscola == codigo, ct))
+        if (await _escolas.ExisteComCodigoAsync(codigo, cancellationToken))
         {
-            return (false, "Ja existe escola com este codigo.", null);
-        }
-        var adminEmail = input.AdminEmail.Trim().ToLowerInvariant();
-        if (await _db.Usuarios.AnyAsync(u => u.Email.ToLower() == adminEmail, ct))
-        {
-            return (false, "Ja existe usuario com este email.", null);
+            return new EscolaCriacaoResultado(false, null, "Ja existe escola com este codigo.", EscolaCriacaoFalha.CodigoDuplicado);
         }
 
-        try
+        var adminEmail = request.AdminEmail.Trim().ToLowerInvariant();
+        if (await _usuarios.ExisteComEmailAsync(adminEmail, cancellationToken))
         {
-            Escola? entidade = null;
+            return new EscolaCriacaoResultado(false, null, "Ja existe usuario com este email.", EscolaCriacaoFalha.EmailDuplicado);
+        }
 
-            var isInMemoryProvider = string.Equals(
-                _db.Database.ProviderName,
-                "Microsoft.EntityFrameworkCore.InMemory",
-                StringComparison.Ordinal);
-            var useTransaction = !isInMemoryProvider;
-            if (useTransaction)
+        Escola? entidade = null;
+        await _unitOfWork.ExecuteInTransactionAsync(
+            async () =>
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-                entidade = await CriarEscolaEUsuarioAdminAsync(input, codigo, adminEmail, ct);
-                await transaction.CommitAsync(ct);
-            }
-            else
-            {
-                entidade = await CriarEscolaEUsuarioAdminAsync(input, codigo, adminEmail, ct);
-            }
+                entidade = await CriarEscolaEUsuarioAdminAsync(request, codigo, adminEmail, cancellationToken);
+            },
+            cancellationToken);
 
-            var dto = new EscolaListItemDto(entidade.Id, entidade.CodigoEscola, entidade.NomeFantasia, entidade.Status);
-            return (true, null, dto);
-        }
-        catch
+        if (entidade is null)
         {
-            throw;
+            return new EscolaCriacaoResultado(false, null, "Falha ao criar escola.", EscolaCriacaoFalha.ErroInterno);
         }
+
+        var dto = _mapper.Map<EscolaListItemResponse>(entidade);
+        return new EscolaCriacaoResultado(true, dto, null, EscolaCriacaoFalha.Nenhuma);
     }
 
     private async Task<Escola> CriarEscolaEUsuarioAdminAsync(
-        CriarEscolaInput input,
+        CriarEscolaRequest request,
         string codigoEscola,
         string adminEmail,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var entidade = new Escola
         {
             CodigoEscola = codigoEscola,
-            NomeFantasia = input.NomeFantasia.Trim(),
-            RazaoSocial = string.IsNullOrWhiteSpace(input.RazaoSocial) ? null : input.RazaoSocial.Trim(),
-            Cnpj = string.IsNullOrWhiteSpace(input.Cnpj) ? null : input.Cnpj.Trim(),
-            Status = "Ativo"
+            NomeFantasia = request.NomeFantasia.Trim(),
+            RazaoSocial = string.IsNullOrWhiteSpace(request.RazaoSocial) ? null : request.RazaoSocial.Trim(),
+            Cnpj = string.IsNullOrWhiteSpace(request.Cnpj) ? null : request.Cnpj.Trim(),
+            Status = Escola.Estados.Ativo
         };
 
-        _db.Escolas.Add(entidade);
-        await _db.SaveChangesAsync(ct);
+        _escolas.Adicionar(entidade);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var perfilAdmin = new Perfil
         {
             EscolaId = entidade.Id,
             Nome = AdminPerfilNome,
-            Status = "Ativo"
+            Status = Perfil.Estados.Ativo
         };
-        _db.Perfis.Add(perfilAdmin);
-        await _db.SaveChangesAsync(ct);
+        _perfis.Adicionar(perfilAdmin);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var permissoesPadraoAdmin = await _db.Permissoes.AsNoTracking()
-            .Where(p => p.Nome != "GERENCIAR_ESCOLAS")
-            .Select(p => p.Id)
-            .ToListAsync(ct);
+        var permissoesPadraoAdmin = await _permissoes.ObterIdsOndeNomeDiferenteDeAsync(
+            PermissaoExcluirDasPadroesAdmin,
+            cancellationToken);
         if (permissoesPadraoAdmin.Count > 0)
         {
-            var perfilPermissoes = permissoesPadraoAdmin.Select(permissaoId => new PerfilPermissao
+            var vinculos = permissoesPadraoAdmin.Select(permissaoId => new PerfilPermissao
             {
                 PerfilId = perfilAdmin.Id,
                 PermissaoId = permissaoId
             });
-            _db.PerfilPermissoes.AddRange(perfilPermissoes);
+            _perfilPermissoes.AdicionarVarios(vinculos);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        var adminNome = string.IsNullOrWhiteSpace(input.AdminNomeCompleto)
+        var adminNome = string.IsNullOrWhiteSpace(request.AdminNomeCompleto)
             ? $"Administrador {entidade.NomeFantasia}"
-            : input.AdminNomeCompleto.Trim();
+            : request.AdminNomeCompleto.Trim();
         var admin = new Usuario
         {
             EscolaId = entidade.Id,
             PerfilId = perfilAdmin.Id,
             NomeCompleto = adminNome,
             Email = adminEmail,
-            Senha = BCrypt.Net.BCrypt.HashPassword(input.AdminPassword),
-            Status = "Ativo"
+            Senha = BCrypt.Net.BCrypt.HashPassword(request.AdminPassword),
+            Status = Usuario.Estados.Ativo
         };
-        _db.Usuarios.Add(admin);
-        await _db.SaveChangesAsync(ct);
+        _usuarios.Adicionar(admin);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return entidade;
     }
 
-    private static bool IsValidPassword(string password)
+    private static bool SenhaValida(string password)
     {
         if (password.Length < 8) return false;
 

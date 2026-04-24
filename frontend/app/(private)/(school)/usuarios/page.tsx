@@ -1,68 +1,80 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  criarUsuarioMinhaEscola,
+  editarUsuarioMinhaEscola,
+  listarPerfisMinhaEscola,
+  listarUsuariosMinhaEscola,
+  type EditarUsuarioMinhaEscolaPayload,
+  type PerfilMinhaEscola,
+  type UsuarioMinhaEscola,
+} from "@/lib/api/usuarios";
+import { getApiErrorMessage } from "@/lib/api/client";
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
-// 👇 Atualizado com os novos perfis
-type Perfil = "professor" | "financeiro" | "coordenador" | "administrador" | "comercial" | "secretaria";
-type Status = "ativo" | "inativo";
+type StatusFiltro = "todos" | "Ativo" | "Inativo";
+type ModalMode = "create" | "edit";
 
-interface Usuario {
-  id: number;
-  nome: string;
-  email: string;
-  perfil: Perfil;
-  status: Status;
-  criadoEm: string;
-}
-
-// ─── Dados mock (substituir pela API futuramente) ─────────────────────────────
-const usuariosMock: Usuario[] = [
-  { id: 1, nome: "Ana Paula Silva",    email: "ana@learly.com",    perfil: "coordenador",   status: "ativo",   criadoEm: "10/01/2025" },
-  { id: 2, nome: "Carlos Mendes",      email: "carlos@learly.com", perfil: "professor",     status: "ativo",   criadoEm: "12/01/2025" },
-  { id: 3, nome: "Fernanda Costa",     email: "fernanda@learly.com",perfil: "financeiro",   status: "ativo",   criadoEm: "15/01/2025" },
-  { id: 4, nome: "Rafael Souza",       email: "rafael@learly.com", perfil: "comercial",     status: "ativo",   criadoEm: "20/01/2025" },
-  { id: 5, nome: "Gabrielli Pupia",    email: "gabi@learly.com",   perfil: "administrador", status: "ativo",   criadoEm: "01/01/2025" },
-  { id: 6, nome: "Marcos Almeida",     email: "marcos@learly.com", perfil: "secretaria",    status: "ativo",   criadoEm: "28/02/2026" },
-];
-
-const perfilLabel: Record<Perfil, string> = {
-  professor:     "Professor",
-  financeiro:    "Financeiro",
-  coordenador:   "Coordenador",
-  administrador: "Administrador",
-  comercial:     "Comercial", // 👈 Novo
-  secretaria:    "Secretaria", // 👈 Novo
-};
-
-const perfilColors: Record<Perfil, string> = {
-  professor:     "bg-blue-50 text-blue-700",
-  financeiro:    "bg-amber-50 text-amber-700",
-  coordenador:   "bg-purple-50 text-purple-700",
-  administrador: "bg-zinc-100 text-zinc-700",
-  comercial:     "bg-emerald-50 text-emerald-700", // 👈 Novo
-  secretaria:    "bg-indigo-50 text-indigo-700", // 👈 Novo
-};
-
-// ─── Modal de criar/editar usuário ────────────────────────────────────────────
 interface ModalProps {
-  usuario: Partial<Usuario> | null;
+  mode: ModalMode;
+  perfis: PerfilMinhaEscola[];
+  usuario: UsuarioMinhaEscola | null;
   onClose: () => void;
-  onSave: (u: Partial<Usuario>) => void;
+  onCreate: (payload: {
+    nomeCompleto: string;
+    email: string;
+    senha: string;
+    perfilId: number;
+  }) => Promise<void>;
+  onEdit: (payload: EditarUsuarioMinhaEscolaPayload) => Promise<void>;
+  saving: boolean;
+  errorMessage: string | null;
 }
 
-function ModalUsuario({ usuario, onClose, onSave }: ModalProps) {
-  const [form, setForm] = useState<Partial<Usuario>>({
-    nome:   usuario?.nome   ?? "",
-    email:  usuario?.email  ?? "",
-    perfil: usuario?.perfil ?? "professor",
-    status: usuario?.status ?? "ativo",
+function ModalUsuario({
+  mode,
+  perfis,
+  usuario,
+  onClose,
+  onCreate,
+  onEdit,
+  saving,
+  errorMessage,
+}: ModalProps) {
+  const [form, setForm] = useState({
+    nomeCompleto: usuario?.nomeCompleto ?? "",
+    email: usuario?.email ?? "",
+    senha: "",
+    perfilId: usuario?.perfilId ?? perfis[0]?.id ?? 0,
+    status: usuario?.status ?? "Ativo",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const isCreate = mode === "create";
 
-  const isEdit = !!usuario?.id;
-
-  function handleChange(field: keyof Usuario, value: string) {
+  function handleChange(
+    field: "nomeCompleto" | "email" | "senha" | "perfilId" | "status",
+    value: string,
+  ) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleSubmit() {
+    if (isCreate) {
+      await onCreate({
+        nomeCompleto: form.nomeCompleto,
+        email: form.email,
+        senha: form.senha,
+        perfilId: Number(form.perfilId),
+      });
+      return;
+    }
+
+    await onEdit({
+      nomeCompleto: form.nomeCompleto,
+      email: form.email,
+      perfilId: Number(form.perfilId),
+      status: form.status as "Ativo" | "Inativo",
+    });
   }
 
   return (
@@ -72,7 +84,7 @@ function ModalUsuario({ usuario, onClose, onSave }: ModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
           <h2 className="text-base font-semibold text-zinc-900">
-            {isEdit ? "Editar usuário" : "Novo usuário"}
+            {isCreate ? "Novo usuario" : "Editar usuario"}
           </h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 transition-colors">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -88,8 +100,8 @@ function ModalUsuario({ usuario, onClose, onSave }: ModalProps) {
             <label className="text-sm font-medium text-zinc-700">Nome completo *</label>
             <input
               type="text"
-              value={form.nome}
-              onChange={(e) => handleChange("nome", e.target.value)}
+              value={form.nomeCompleto}
+              onChange={(e) => handleChange("nomeCompleto", e.target.value)}
               placeholder="Nome do usuário"
               className="h-10 border border-zinc-300 rounded-lg px-3 text-sm text-zinc-900 outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition"
             />
@@ -106,47 +118,62 @@ function ModalUsuario({ usuario, onClose, onSave }: ModalProps) {
             />
           </div>
 
-          {!isEdit && (
+          {isCreate && (
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700">Senha *</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="h-10 border border-zinc-300 rounded-lg px-3 text-sm text-zinc-900 outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={form.senha}
+                  onChange={(e) => handleChange("senha", e.target.value)}
+                  placeholder="Senha forte (ex.: Senha123)"
+                  className="h-10 w-full border border-zinc-300 rounded-lg pl-3 pr-10 text-sm text-zinc-900 outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-zinc-600 hover:text-zinc-900"
+                >
+                  {showPassword ? "Ocultar" : "Ver"}
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="flex gap-4">
-            <div className="flex flex-col gap-1.5 flex-1">
-              <label className="text-sm font-medium text-zinc-700">Perfil *</label>
-              <select
-                value={form.perfil}
-                onChange={(e) => handleChange("perfil", e.target.value)}
-                className="h-10 border border-zinc-300 rounded-lg px-3 text-sm text-zinc-900 outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition bg-white"
-              >
-                {/* 👇 Atualizado com os novos perfis */}
-                <option value="professor">Professor</option>
-                <option value="comercial">Comercial</option>
-                <option value="secretaria">Secretaria</option>
-                <option value="financeiro">Financeiro</option>
-                <option value="coordenador">Coordenador</option>
-                <option value="administrador">Administrador</option>
-              </select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Perfil *</label>
+            <select
+              value={form.perfilId}
+              onChange={(e) => handleChange("perfilId", e.target.value)}
+              className="h-10 border border-zinc-300 rounded-lg px-3 text-sm text-zinc-900 outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition bg-white"
+            >
+              {perfis.map((perfil) => (
+                <option key={perfil.id} value={perfil.id}>
+                  {perfil.nome}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="flex flex-col gap-1.5 flex-1">
+          {!isCreate && (
+            <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700">Status *</label>
               <select
                 value={form.status}
                 onChange={(e) => handleChange("status", e.target.value)}
                 className="h-10 border border-zinc-300 rounded-lg px-3 text-sm text-zinc-900 outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/10 transition bg-white"
               >
-                <option value="ativo">Ativo</option>
-                <option value="inativo">Inativo</option>
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
               </select>
             </div>
-          </div>
+          )}
+
+          {errorMessage && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errorMessage}
+            </div>
+          )}
 
         </div>
 
@@ -159,10 +186,11 @@ function ModalUsuario({ usuario, onClose, onSave }: ModalProps) {
             Cancelar
           </button>
           <button
-            onClick={() => onSave(form)}
-            className="h-9 px-4 text-sm font-medium text-white bg-[#1F2A35] rounded-lg hover:bg-[#2d3d4d] transition-colors"
+            disabled={saving || perfis.length === 0}
+            onClick={() => void handleSubmit()}
+            className="h-9 px-4 text-sm font-medium text-white bg-[#1F2A35] rounded-lg hover:bg-[#2d3d4d] transition-colors disabled:opacity-60"
           >
-            {isEdit ? "Salvar alterações" : "Criar usuário"}
+            {saving ? "Salvando..." : isCreate ? "Criar usuario" : "Salvar alteracoes"}
           </button>
         </div>
 
@@ -171,59 +199,90 @@ function ModalUsuario({ usuario, onClose, onSave }: ModalProps) {
   );
 }
 
-// ─── Página principal ─────────────────────────────────────────────────────────
 export default function UsuariosPage() {
-  const [usuarios, setUsuarios] = useState<Usuario[]>(usuariosMock);
+  const [usuarios, setUsuarios] = useState<UsuarioMinhaEscola[]>([]);
+  const [perfis, setPerfis] = useState<PerfilMinhaEscola[]>([]);
   const [busca, setBusca] = useState("");
-  const [filtroPerfil, setFiltroPerfil] = useState<Perfil | "todos">("todos");
-  const [filtroStatus, setFiltroStatus] = useState<Status | "todos">("todos");
+  const [filtroPerfil, setFiltroPerfil] = useState<string>("todos");
+  const [filtroStatus, setFiltroStatus] = useState<StatusFiltro>("todos");
   const [modalAberto, setModalAberto] = useState(false);
-  const [usuarioEditando, setUsuarioEditando] = useState<Usuario | null>(null);
+  const [modalMode, setModalMode] = useState<ModalMode>("create");
+  const [usuarioSelecionado, setUsuarioSelecionado] = useState<UsuarioMinhaEscola | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
-  // Filtros
-  const usuariosFiltrados = usuarios.filter((u) => {
-    const buscaOk = u.nome.toLowerCase().includes(busca.toLowerCase()) ||
-                    u.email.toLowerCase().includes(busca.toLowerCase());
-    const perfilOk = filtroPerfil === "todos" || u.perfil === filtroPerfil;
-    const statusOk = filtroStatus === "todos" || u.status === filtroStatus;
-    return buscaOk && perfilOk && statusOk;
-  });
-
-  function abrirNovo() {
-    setUsuarioEditando(null);
-    setModalAberto(true);
-  }
-
-  function abrirEditar(u: Usuario) {
-    setUsuarioEditando(u);
-    setModalAberto(true);
-  }
-
-  function salvar(form: Partial<Usuario>) {
-    if (usuarioEditando) {
-      setUsuarios((prev) =>
-        prev.map((u) => (u.id === usuarioEditando.id ? { ...u, ...form } : u))
-      );
-    } else {
-      const novo: Usuario = {
-        id: Date.now(),
-        nome:      form.nome   ?? "",
-        email:     form.email  ?? "",
-        perfil:    form.perfil ?? "professor",
-        status:    form.status ?? "ativo",
-        criadoEm: new Date().toLocaleDateString("pt-BR"),
-      };
-      setUsuarios((prev) => [novo, ...prev]);
+  useEffect(() => {
+    async function carregar() {
+      setLoading(true);
+      setPageError(null);
+      try {
+        const [usuariosResp, perfisResp] = await Promise.all([
+          listarUsuariosMinhaEscola(),
+          listarPerfisMinhaEscola(),
+        ]);
+        setUsuarios(usuariosResp);
+        setPerfis(perfisResp);
+      } catch (error) {
+        setPageError(getApiErrorMessage(error, "Falha ao carregar usuarios."));
+      } finally {
+        setLoading(false);
+      }
     }
-    setModalAberto(false);
+
+    void carregar();
+  }, []);
+
+  const usuariosFiltrados = useMemo(() => {
+    return usuarios.filter((u) => {
+      const buscaTexto = busca.trim().toLowerCase();
+      const buscaOk =
+        buscaTexto.length === 0 ||
+        u.nomeCompleto.toLowerCase().includes(buscaTexto) ||
+        u.email.toLowerCase().includes(buscaTexto);
+      const perfilOk = filtroPerfil === "todos" || String(u.perfilId) === filtroPerfil;
+      const statusOk = filtroStatus === "todos" || u.status === filtroStatus;
+      return buscaOk && perfilOk && statusOk;
+    });
+  }, [usuarios, busca, filtroPerfil, filtroStatus]);
+
+  async function salvar(payload: {
+    nomeCompleto: string;
+    email: string;
+    senha: string;
+    perfilId: number;
+  }) {
+    setSaving(true);
+    setModalError(null);
+    try {
+      await criarUsuarioMinhaEscola(payload);
+      const usuariosAtualizados = await listarUsuariosMinhaEscola();
+      setUsuarios(usuariosAtualizados);
+      setModalAberto(false);
+    } catch (error) {
+      setModalError(getApiErrorMessage(error, "Nao foi possivel criar o usuario."));
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function toggleStatus(id: number) {
-    setUsuarios((prev) =>
-      prev.map((u) =>
-        u.id === id ? { ...u, status: u.status === "ativo" ? "inativo" : "ativo" } : u
-      )
-    );
+  async function editar(payload: EditarUsuarioMinhaEscolaPayload) {
+    if (!usuarioSelecionado) return;
+
+    setSaving(true);
+    setModalError(null);
+    try {
+      await editarUsuarioMinhaEscola(usuarioSelecionado.id, payload);
+      const usuariosAtualizados = await listarUsuariosMinhaEscola();
+      setUsuarios(usuariosAtualizados);
+      setModalAberto(false);
+      setUsuarioSelecionado(null);
+    } catch (error) {
+      setModalError(getApiErrorMessage(error, "Nao foi possivel editar o usuario."));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -237,15 +296,27 @@ export default function UsuariosPage() {
             <p className="text-sm text-zinc-500 mt-0.5">Gerencie os acessos ao sistema</p>
           </div>
           <button
-            onClick={abrirNovo}
+            onClick={() => {
+              setModalError(null);
+              setModalMode("create");
+              setUsuarioSelecionado(null);
+              setModalAberto(true);
+            }}
+            disabled={perfis.length === 0}
             className="flex items-center gap-2 h-9 px-4 text-sm font-medium text-white bg-[#1F2A35] rounded-lg hover:bg-[#2d3d4d] transition-colors"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            Novo usuário
+            Novo usuario
           </button>
         </div>
+
+        {pageError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {pageError}
+          </div>
+        )}
 
         {/* Filtros */}
         <div className="flex flex-wrap gap-3">
@@ -258,25 +329,24 @@ export default function UsuariosPage() {
           />
           <select
             value={filtroPerfil}
-            onChange={(e) => setFiltroPerfil(e.target.value as Perfil | "todos")}
+            onChange={(e) => setFiltroPerfil(e.target.value)}
             className="h-9 border border-zinc-300 rounded-lg px-3 text-sm text-zinc-700 outline-none focus:border-[#1F2A35] transition bg-white"
           >
             <option value="todos">Todos os perfis</option>
-            <option value="professor">Professor</option>
-            <option value="comercial">Comercial</option>
-            <option value="secretaria">Secretaria</option>
-            <option value="financeiro">Financeiro</option>
-            <option value="coordenador">Coordenador</option>
-            <option value="administrador">Administrador</option>
+            {perfis.map((perfil) => (
+              <option key={perfil.id} value={String(perfil.id)}>
+                {perfil.nome}
+              </option>
+            ))}
           </select>
           <select
             value={filtroStatus}
-            onChange={(e) => setFiltroStatus(e.target.value as Status | "todos")}
+            onChange={(e) => setFiltroStatus(e.target.value as StatusFiltro)}
             className="h-9 border border-zinc-300 rounded-lg px-3 text-sm text-zinc-700 outline-none focus:border-[#1F2A35] transition bg-white"
           >
             <option value="todos">Todos os status</option>
-            <option value="ativo">Ativo</option>
-            <option value="inativo">Inativo</option>
+            <option value="Ativo">Ativo</option>
+            <option value="Inativo">Inativo</option>
           </select>
         </div>
 
@@ -289,15 +359,20 @@ export default function UsuariosPage() {
                 <th className="text-left px-4 py-3 font-medium text-zinc-500">E-mail</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-500">Perfil</th>
                 <th className="text-left px-4 py-3 font-medium text-zinc-500">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-zinc-500">Criado em</th>
-                <th className="px-4 py-3" />
+                <th className="text-right px-4 py-3 font-medium text-zinc-500">Acoes</th>
               </tr>
             </thead>
             <tbody>
-              {usuariosFiltrados.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-zinc-400">
-                    Nenhum usuário encontrado
+                  <td colSpan={5} className="text-center py-12 text-zinc-400">
+                    Carregando usuarios...
+                  </td>
+                </tr>
+              ) : usuariosFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-zinc-400">
+                    Nenhum usuario encontrado
                   </td>
                 </tr>
               ) : (
@@ -310,9 +385,9 @@ export default function UsuariosPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#1F2A35] flex items-center justify-center text-white text-xs font-semibold shrink-0">
-                          {u.nome.charAt(0).toUpperCase()}
+                          {u.nomeCompleto.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium text-zinc-900">{u.nome}</span>
+                        <span className="font-medium text-zinc-900">{u.nomeCompleto}</span>
                       </div>
                     </td>
 
@@ -321,46 +396,35 @@ export default function UsuariosPage() {
 
                     {/* Perfil badge */}
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${perfilColors[u.perfil]}`}>
-                        {perfilLabel[u.perfil]}
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-100 text-zinc-700">
+                        {u.perfilNome}
                       </span>
                     </td>
 
                     {/* Status badge */}
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        u.status === "ativo"
+                        u.status === "Ativo"
                           ? "bg-green-50 text-green-700"
                           : "bg-red-50 text-red-600"
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${u.status === "ativo" ? "bg-green-500" : "bg-red-400"}`} />
-                        {u.status === "ativo" ? "Ativo" : "Inativo"}
+                        <span className={`w-1.5 h-1.5 rounded-full ${u.status === "Ativo" ? "bg-green-500" : "bg-red-400"}`} />
+                        {u.status}
                       </span>
                     </td>
-
-                    {/* Data */}
-                    <td className="px-4 py-3 text-zinc-400">{u.criadoEm}</td>
-
-                    {/* Ações */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => abrirEditar(u)}
-                          className="h-8 px-3 text-xs font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:bg-zinc-100 transition-colors"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => toggleStatus(u.id)}
-                          className={`h-8 px-3 text-xs font-medium rounded-lg border transition-colors ${
-                            u.status === "ativo"
-                              ? "text-red-600 border-red-200 hover:bg-red-50"
-                              : "text-green-700 border-green-200 hover:bg-green-50"
-                          }`}
-                        >
-                          {u.status === "ativo" ? "Inativar" : "Ativar"}
-                        </button>
-                      </div>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalError(null);
+                          setModalMode("edit");
+                          setUsuarioSelecionado(u);
+                          setModalAberto(true);
+                        }}
+                        className="h-8 px-3 text-xs font-medium border border-zinc-300 rounded-lg text-zinc-700 hover:bg-zinc-100 transition-colors"
+                      >
+                        Alterar dados
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -379,9 +443,14 @@ export default function UsuariosPage() {
       {/* Modal */}
       {modalAberto && (
         <ModalUsuario
-          usuario={usuarioEditando}
+          mode={modalMode}
+          perfis={perfis}
+          usuario={usuarioSelecionado}
+          saving={saving}
+          errorMessage={modalError}
           onClose={() => setModalAberto(false)}
-          onSave={salvar}
+          onCreate={salvar}
+          onEdit={editar}
         />
       )}
     </>

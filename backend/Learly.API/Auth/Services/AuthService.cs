@@ -61,6 +61,17 @@ public sealed class AuthService : IAuthService
         }
 
         var permissoes = await _authRepository.GetPermissoesAsync(usuario.Id, usuario.PerfilId);
+        if (permissoes.Count == 0)
+        {
+            var atualizouPermissoes = await _authRepository.GarantirPermissoesPadraoPerfilAsync(
+                usuario.PerfilId,
+                loginContext.Perfil.Nome);
+            if (atualizouPermissoes)
+            {
+                permissoes = await _authRepository.GetPermissoesAsync(usuario.Id, usuario.PerfilId);
+            }
+        }
+
         var isSuperAdmin = AuthConstants.IsSystemSuperAdmin(
             loginContext.Escola.CodigoEscola,
             loginContext.Perfil.Nome);

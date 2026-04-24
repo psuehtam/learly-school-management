@@ -21,4 +21,15 @@ internal sealed class PerfilRepository(LearlyDbContext db) : RepositoryBase<Perf
             p => p.EscolaId == escolaId && p.Nome.ToLower() == n.ToLower(),
             cancellationToken);
     }
+
+    public async Task<IReadOnlyList<Perfil>> ListarPorEscolaAsync(
+        int escolaId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Db.Perfis.AsNoTracking()
+            .Where(p => p.EscolaId == escolaId)
+            .OrderBy(p => p.Nome)
+            .ThenBy(p => p.Id)
+            .ToListAsync(cancellationToken);
+    }
 }

@@ -87,6 +87,14 @@ public sealed class Usuario
         Email = email;
     }
 
+    public void AlterarPerfil(int perfilId)
+    {
+        if (perfilId <= 0)
+            throw new DomainException("PerfilId invalido.");
+
+        PerfilId = perfilId;
+    }
+
     private static string ValidarNomeCompleto(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))

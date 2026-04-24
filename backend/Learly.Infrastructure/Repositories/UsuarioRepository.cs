@@ -19,6 +19,38 @@ internal sealed class UsuarioRepository(LearlyDbContext db) : RepositoryBase<Usu
         return await Db.Usuarios.AnyAsync(u => u.Email.ToLower() == normalized, cancellationToken);
     }
 
+    public async Task<bool> ExisteComEmailExcetoIdAsync(
+        string email,
+        int usuarioIdIgnorado,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = email.Trim().ToLowerInvariant();
+        return await Db.Usuarios.AnyAsync(
+            u => u.Id != usuarioIdIgnorado && u.Email.ToLower() == normalized,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Usuario>> ListarPorEscolaAsync(
+        int escolaId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Db.Usuarios.AsNoTracking()
+            .Where(u => u.EscolaId == escolaId)
+            .OrderBy(u => u.NomeCompleto)
+            .ThenBy(u => u.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Usuario?> ObterPorIdEEscolaAsync(
+        int usuarioId,
+        int escolaId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Db.Usuarios.FirstOrDefaultAsync(
+            u => u.Id == usuarioId && u.EscolaId == escolaId,
+            cancellationToken);
+    }
+
     public async Task<bool> ProfessorAtivoNaEscolaAsync(
         int usuarioId,
         int escolaId,

@@ -9,11 +9,30 @@ public interface IAuthRepository
 {
     Task<LoginContext?> GetLoginContextAsync(string email, string? codigoEscola);
     Task<IReadOnlyList<string>> GetPermissoesAsync(int usuarioId, int perfilId);
+    Task<bool> GarantirPermissoesPadraoPerfilAsync(int perfilId, string nomePerfil);
     Task UpdateSenhaAsync(Usuario usuario, string senhaHash);
 }
 
 public sealed class AuthRepository : IAuthRepository
 {
+    private static readonly IReadOnlyDictionary<string, string[]> PermissoesPadraoPorPerfil =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Administrador"] =
+            [
+                "CRIAR_USUARIO", "VISUALIZAR_USUARIO", "EDITAR_USUARIO", "INATIVAR_USUARIO",
+                "GERENCIAR_PERMISSOES_USUARIO", "VISUALIZAR_TURMA", "VISUALIZAR_AULA",
+                "VISUALIZAR_MATRICULA", "VISUALIZAR_PRE_ALUNO", "VISUALIZAR_PARCELA",
+                "VISUALIZAR_ALUNO", "VISUALIZAR_REPOSICAO", "VISUALIZAR_LIVRO",
+                "VISUALIZAR_CALENDARIO", "VISUALIZAR_DASHBOARD_GERAL", "VISUALIZAR_AGENDA_GLOBAL",
+            ],
+            ["Professor"] = ["VISUALIZAR_AULA", "VISUALIZAR_TURMA", "VISUALIZAR_CALENDARIO", "VISUALIZAR_COMPROMISSOS"],
+            ["Comercial"] = ["VISUALIZAR_PRE_ALUNO", "CRIAR_PRE_ALUNO", "VISUALIZAR_COMPROMISSOS", "CRIAR_COMPROMISSO"],
+            ["Secretaria"] = ["VISUALIZAR_MATRICULA", "CRIAR_MATRICULA", "VISUALIZAR_ALUNO", "VISUALIZAR_COMPROMISSOS"],
+            ["Financeiro"] = ["VISUALIZAR_PARCELA", "VISUALIZAR_MOVIMENTACAO_FINANCEIRA", "VISUALIZAR_COMPROMISSOS"],
+            ["Coordenador"] = ["VISUALIZAR_TURMA", "VISUALIZAR_AULA", "VISUALIZAR_REPOSICAO", "VISUALIZAR_DASHBOARD_GERAL", "VISUALIZAR_COMPROMISSOS"],
+        };
+
     private readonly LearlyDbContext _db;
 
     public AuthRepository(LearlyDbContext db)
@@ -109,6 +128,56 @@ public sealed class AuthRepository : IAuthRepository
             .ToListAsync();
 
         return permissoesPerfil.Concat(permissoesUsuario).Distinct().ToList();
+    }
+
+    public async Task<bool> GarantirPermissoesPadraoPerfilAsync(int perfilId, string nomePerfil)
+    {
+        if (!PermissoesPadraoPorPerfil.TryGetValue(nomePerfil, out var nomesPermissao))
+        {
+            return false;
+        }
+
+        var nomesPermissaoLista = nomesPermissao
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (nomesPermissaoLista.Count == 0)
+        {
+            return false;
+        }
+
+        var idsPermissao = await _db.Permissoes
+            .Where(p => nomesPermissaoLista.Contains(p.Nome))
+            .Select(p => p.Id)
+            .ToListAsync();
+        if (idsPermissao.Count == 0)
+        {
+            return false;
+        }
+
+        var idsExistentes = await _db.PerfilPermissoes
+            .Where(pp => pp.PerfilId == perfilId)
+            .Select(pp => pp.PermissaoId)
+            .ToListAsync();
+
+        var idsFaltantes = idsPermissao
+            .Distinct()
+            .Except(idsExistentes)
+            .ToList();
+        if (idsFaltantes.Count == 0)
+        {
+            return false;
+        }
+
+        var vinculos = idsFaltantes.Select(id => new PerfilPermissao
+        {
+            PerfilId = perfilId,
+            PermissaoId = id
+        });
+        _db.PerfilPermissoes.AddRange(vinculos);
+        await _db.SaveChangesAsync();
+        return true;
     }
 
     public async Task UpdateSenhaAsync(Usuario usuario, string senhaHash)

@@ -1,10 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { logout } from "@/lib/auth";
 
 export default function UnauthorizedPage() {
-  const router = useRouter();
-
   return (
     <main className="min-h-screen flex items-center justify-center bg-zinc-50 px-4">
       <div className="max-w-md w-full bg-white rounded-xl border border-zinc-200 shadow-sm p-8 text-center">
@@ -15,7 +13,7 @@ export default function UnauthorizedPage() {
         </p>
         <button
           type="button"
-          onClick={() => router.replace("/login")}
+          onClick={() => void logout()}
           className="inline-flex items-center justify-center px-5 py-2.5 bg-[#1F2A35] text-white text-sm font-medium rounded-lg hover:bg-[#2a3a4a] transition-colors"
         >
           Ir para login

@@ -113,6 +113,16 @@ public static class SecurityConfig
                 "EDITAR_USUARIO",
                 "INATIVAR_USUARIO",
                 "GERENCIAR_PERMISSOES_USUARIO",
+                "VISUALIZAR_PERFIL",
+                "CRIAR_PERFIL",
+                "EDITAR_PERFIL",
+                "VISUALIZAR_RESPONSAVEL",
+                "CRIAR_RESPONSAVEL",
+                "EDITAR_RESPONSAVEL",
+                "INATIVAR_RESPONSAVEL",
+                "CRIAR_FILIACAO",
+                "EDITAR_FILIACAO",
+                "INATIVAR_TEMPLATE_CONTRATO",
 
                 // Alunos
                 "CRIAR_ALUNO",

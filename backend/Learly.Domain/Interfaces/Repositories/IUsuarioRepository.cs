@@ -8,6 +8,20 @@ public interface IUsuarioRepository : IRepository<Usuario, int>
 
     Task<bool> ExisteComEmailAsync(string email, CancellationToken cancellationToken = default);
 
+    Task<bool> ExisteComEmailExcetoIdAsync(
+        string email,
+        int usuarioIdIgnorado,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Usuario>> ListarPorEscolaAsync(
+        int escolaId,
+        CancellationToken cancellationToken = default);
+
+    Task<Usuario?> ObterPorIdEEscolaAsync(
+        int usuarioId,
+        int escolaId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> ProfessorAtivoNaEscolaAsync(
         int usuarioId,
         int escolaId,

@@ -48,8 +48,44 @@ public sealed class UsuariosControllerIntegrationTests : IClassFixture<CustomWeb
         Assert.True(body!.Id > 0);
     }
 
+    [Fact]
+    public async Task ListarMinhaEscola_DeveRetornarSomenteUsuariosDoTenant()
+    {
+        using var client = _factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var loginResponse = await client.PostAsJsonAsync("/auth/login", new
+        {
+            codigoEscola = "ESC-1",
+            email = "comum@learly.com",
+            senha = "123456"
+        });
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+
+        var response = await client.GetAsync("/api/usuarios/minha-escola");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var usuarios = await response.Content.ReadFromJsonAsync<List<UsuarioMinhaEscolaItemDto>>(jsonOptions);
+        Assert.NotNull(usuarios);
+        Assert.NotEmpty(usuarios!);
+        Assert.DoesNotContain(usuarios!, u => string.Equals(u.Email, "super@learly.com", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(usuarios!, u => string.Equals(u.Email, "comum@learly.com", StringComparison.OrdinalIgnoreCase));
+    }
+
     private sealed class CriarUsuarioResponseDto
     {
         public int Id { get; set; }
+    }
+
+    private sealed class UsuarioMinhaEscolaItemDto
+    {
+        public int Id { get; set; }
+        public string NomeCompleto { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
     }
 }

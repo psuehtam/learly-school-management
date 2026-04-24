@@ -12,7 +12,6 @@ namespace Learly.API.Controllers;
 /// <summary>
 /// Gestao de usuarios no tenant da escola.
 /// <see cref="SchoolUserOnlyAttribute"/> garante usuario de escola (nao super admin) com <c>codigoEscola</c> no token.
-/// <see cref="EscolaListagemAuthorizeFilter"/> exige VISUALIZAR_ESCOLAS ou GERENCIAR_ESCOLAS (alinhado ao padrao de <see cref="EscolasController"/>).
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -27,9 +26,32 @@ public sealed class UsuariosController : ControllerBase
         _usuariosService = usuariosService;
     }
 
+    /// <summary>Lista usuarios do mesmo tenant (escola) do token.</summary>
+    [HttpGet("minha-escola")]
+    [Authorize(Policy = "VISUALIZAR_USUARIO")]
+    public async Task<ActionResult<IReadOnlyList<UsuarioMinhaEscolaListItemResponse>>> ListarMinhaEscola(
+        CancellationToken cancellationToken)
+    {
+        var itens = await _usuariosService.ListarMinhaEscolaAsync(
+            AppUserContextMapper.From(HttpContext.GetUserContext()),
+            cancellationToken);
+        return Ok(itens);
+    }
+
+    /// <summary>Lista perfis ativos da escola do token para uso no cadastro de usuario.</summary>
+    [HttpGet("minha-escola/perfis")]
+    [Authorize(Policy = "CRIAR_USUARIO")]
+    public async Task<ActionResult<IReadOnlyList<PerfilMinhaEscolaListItemResponse>>> ListarPerfisMinhaEscola(
+        CancellationToken cancellationToken)
+    {
+        var itens = await _usuariosService.ListarPerfisMinhaEscolaAsync(
+            AppUserContextMapper.From(HttpContext.GetUserContext()),
+            cancellationToken);
+        return Ok(itens);
+    }
+
     /// <summary>Cria usuario apenas na escola do token (CodigoEscola); ignora qualquer escola enviada implicitamente no corpo.</summary>
     [HttpPost("minha-escola")]
-    [ServiceFilter(typeof(EscolaListagemAuthorizeFilter))]
     [Authorize(Policy = "CRIAR_USUARIO")]
     public async Task<ActionResult<CriarUsuarioResponse>> CriarParaMinhaEscola(
         [FromBody] CriarUsuarioParaMinhaEscolaRequest body,
@@ -40,5 +62,21 @@ public sealed class UsuariosController : ControllerBase
             body,
             cancellationToken);
         return StatusCode(StatusCodes.Status201Created, criado);
+    }
+
+    /// <summary>Edita dados de um usuario da escola do token.</summary>
+    [HttpPut("minha-escola/{usuarioId:int}")]
+    [Authorize(Policy = "EDITAR_USUARIO")]
+    public async Task<IActionResult> EditarDaMinhaEscola(
+        int usuarioId,
+        [FromBody] EditarUsuarioMinhaEscolaRequest body,
+        CancellationToken cancellationToken)
+    {
+        await _usuariosService.EditarDaMinhaEscolaAsync(
+            usuarioId,
+            AppUserContextMapper.From(HttpContext.GetUserContext()),
+            body,
+            cancellationToken);
+        return NoContent();
     }
 }

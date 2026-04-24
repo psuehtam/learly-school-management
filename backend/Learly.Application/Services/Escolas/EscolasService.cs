@@ -13,6 +13,24 @@ public sealed class EscolasService : IEscolasService
 {
     private const string AdminPerfilNome = "Administrador";
     private const string PermissaoExcluirDasPadroesAdmin = "GERENCIAR_ESCOLAS";
+    private static readonly string[] PerfisPadrao = ["Administrador", "Professor", "Comercial", "Secretaria", "Financeiro", "Coordenador"];
+    private static readonly IReadOnlyDictionary<string, string[]> PermissoesPadraoPorPerfil =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Administrador"] =
+            [
+                "CRIAR_USUARIO", "VISUALIZAR_USUARIO", "EDITAR_USUARIO", "INATIVAR_USUARIO",
+                "GERENCIAR_PERMISSOES_USUARIO", "VISUALIZAR_TURMA", "VISUALIZAR_AULA",
+                "VISUALIZAR_MATRICULA", "VISUALIZAR_PRE_ALUNO", "VISUALIZAR_PARCELA",
+                "VISUALIZAR_ALUNO", "VISUALIZAR_REPOSICAO", "VISUALIZAR_LIVRO",
+                "VISUALIZAR_CALENDARIO", "VISUALIZAR_DASHBOARD_GERAL", "VISUALIZAR_AGENDA_GLOBAL",
+            ],
+            ["Professor"] = ["VISUALIZAR_AULA", "VISUALIZAR_TURMA", "VISUALIZAR_CALENDARIO", "VISUALIZAR_COMPROMISSOS"],
+            ["Comercial"] = ["VISUALIZAR_PRE_ALUNO", "CRIAR_PRE_ALUNO", "VISUALIZAR_COMPROMISSOS", "CRIAR_COMPROMISSO"],
+            ["Secretaria"] = ["VISUALIZAR_MATRICULA", "CRIAR_MATRICULA", "VISUALIZAR_ALUNO", "VISUALIZAR_COMPROMISSOS"],
+            ["Financeiro"] = ["VISUALIZAR_PARCELA", "VISUALIZAR_MOVIMENTACAO_FINANCEIRA", "VISUALIZAR_COMPROMISSOS"],
+            ["Coordenador"] = ["VISUALIZAR_TURMA", "VISUALIZAR_AULA", "VISUALIZAR_REPOSICAO", "VISUALIZAR_DASHBOARD_GERAL", "VISUALIZAR_COMPROMISSOS"],
+        };
 
     private readonly IEscolaRepository _escolas;
     private readonly IUsuarioRepository _usuarios;
@@ -126,25 +144,56 @@ public sealed class EscolasService : IEscolasService
         _escolas.Adicionar(entidade);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var perfilAdmin = new Perfil
+        var perfisCriados = PerfisPadrao.Select(nome => new Perfil
         {
             EscolaId = entidade.Id,
-            Nome = AdminPerfilNome,
+            Nome = nome,
             Status = Perfil.Estados.Ativo
-        };
-        _perfis.Adicionar(perfilAdmin);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var permissoesPadraoAdmin = await _permissoes.ObterIdsOndeNomeDiferenteDeAsync(
-            PermissaoExcluirDasPadroesAdmin,
-            cancellationToken);
-        if (permissoesPadraoAdmin.Count > 0)
+        }).ToList();
+        foreach (var perfil in perfisCriados)
         {
-            var vinculos = permissoesPadraoAdmin.Select(permissaoId => new PerfilPermissao
+            _perfis.Adicionar(perfil);
+        }
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        var perfilAdmin = perfisCriados.First(p => string.Equals(p.Nome, AdminPerfilNome, StringComparison.OrdinalIgnoreCase));
+
+        var nomesPermissaoNecessarias = PermissoesPadraoPorPerfil.Values
+            .SelectMany(x => x)
+            .Append("GERENCIAR_ESCOLAS")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var permissaoIdPorNome = await _permissoes.ObterIdsPorNomesAsync(nomesPermissaoNecessarias, cancellationToken);
+        if (permissaoIdPorNome.Count > 0)
+        {
+            var vinculos = new List<PerfilPermissao>();
+            foreach (var perfil in perfisCriados)
             {
-                PerfilId = perfilAdmin.Id,
-                PermissaoId = permissaoId
-            });
+                if (!PermissoesPadraoPorPerfil.TryGetValue(perfil.Nome, out var nomesPerfil))
+                {
+                    continue;
+                }
+
+                foreach (var nomePermissao in nomesPerfil)
+                {
+                    if (!permissaoIdPorNome.TryGetValue(nomePermissao, out var permissaoId))
+                    {
+                        continue;
+                    }
+
+                    vinculos.Add(new PerfilPermissao
+                    {
+                        PerfilId = perfil.Id,
+                        PermissaoId = permissaoId
+                    });
+                }
+            }
+
+            // Mantém super-admin fora do escopo padrão dos tenants.
+            if (permissaoIdPorNome.TryGetValue(PermissaoExcluirDasPadroesAdmin, out var gerenciarEscolasId))
+            {
+                vinculos.RemoveAll(v => v.PermissaoId == gerenciarEscolasId);
+            }
+
             _perfilPermissoes.AdicionarVarios(vinculos);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }

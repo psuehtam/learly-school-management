@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IPerfilRepository, PerfilRepository>();
         services.AddScoped<IPermissaoRepository, PermissaoRepository>();
         services.AddScoped<IPerfilPermissaoRepository, PerfilPermissaoRepository>();
+        services.AddScoped<ITemplatePermissoesRepository, TemplatePermissoesRepository>();
 
         return services;
     }

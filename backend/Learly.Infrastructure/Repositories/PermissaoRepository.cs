@@ -1,3 +1,4 @@
+using Learly.Domain.Entities;
 using Learly.Domain.Interfaces.Repositories;
 using Learly.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,11 @@ namespace Learly.Infrastructure.Repositories;
 
 internal sealed class PermissaoRepository(LearlyDbContext db) : IPermissaoRepository
 {
+    public async Task<IReadOnlyList<Permissao>> ListarTodasOrdenadasPorNomeAsync(
+        CancellationToken cancellationToken = default) =>
+        await db.Permissoes.AsNoTracking()
+            .OrderBy(p => p.Nome)
+            .ToListAsync(cancellationToken);
     public async Task<IReadOnlyList<int>> ObterIdsOndeNomeDiferenteDeAsync(
         string nomeExcluir,
         CancellationToken cancellationToken = default)

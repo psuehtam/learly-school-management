@@ -15,6 +15,8 @@ public class LearlyDbContext : DbContext
     public DbSet<Perfil> Perfis => Set<Perfil>();
     public DbSet<Permissao> Permissoes => Set<Permissao>();
     public DbSet<PerfilPermissao> PerfilPermissoes => Set<PerfilPermissao>();
+    public DbSet<PerfilTemplate> PerfisTemplate => Set<PerfilTemplate>();
+    public DbSet<PerfilPermissaoTemplate> PerfilPermissoesTemplate => Set<PerfilPermissaoTemplate>();
     public DbSet<UsuarioPermissao> UsuarioPermissoes => Set<UsuarioPermissao>();
     public DbSet<Turma> Turmas => Set<Turma>();
     public DbSet<Aula> Aulas => Set<Aula>();

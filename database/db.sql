@@ -58,6 +58,21 @@ CREATE TABLE perfil_permissoes (
     FOREIGN KEY (permissao_id) REFERENCES permissoes(id)
 );
 
+-- Templates globais de perfil (nomes padrão ao criar escola) e vínculos com permissoes.
+CREATE TABLE perfis_template (
+    id   INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(50) NOT NULL,
+    UNIQUE (nome)
+);
+
+CREATE TABLE perfil_permissoes_template (
+    perfil_template_id INT NOT NULL,
+    permissao_id       INT NOT NULL,
+    PRIMARY KEY (perfil_template_id, permissao_id),
+    FOREIGN KEY (perfil_template_id) REFERENCES perfis_template(id),
+    FOREIGN KEY (permissao_id) REFERENCES permissoes(id)
+);
+
 CREATE TABLE usuarios (
     id               INT AUTO_INCREMENT PRIMARY KEY,
     escola_id        INT NOT NULL,

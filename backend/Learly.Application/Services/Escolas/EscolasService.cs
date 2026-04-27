@@ -14,29 +14,13 @@ public sealed class EscolasService : IEscolasService
     private const string AdminPerfilNome = "Administrador";
     private const string PermissaoExcluirDasPadroesAdmin = "GERENCIAR_ESCOLAS";
     private static readonly string[] PerfisPadrao = ["Administrador", "Professor", "Comercial", "Secretaria", "Financeiro", "Coordenador"];
-    private static readonly IReadOnlyDictionary<string, string[]> PermissoesPadraoPorPerfil =
-        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Administrador"] =
-            [
-                "CRIAR_USUARIO", "VISUALIZAR_USUARIO", "EDITAR_USUARIO", "INATIVAR_USUARIO",
-                "GERENCIAR_PERMISSOES_USUARIO", "VISUALIZAR_TURMA", "VISUALIZAR_AULA",
-                "VISUALIZAR_MATRICULA", "VISUALIZAR_PRE_ALUNO", "VISUALIZAR_PARCELA",
-                "VISUALIZAR_ALUNO", "VISUALIZAR_REPOSICAO", "VISUALIZAR_LIVRO",
-                "VISUALIZAR_CALENDARIO", "VISUALIZAR_DASHBOARD_GERAL", "VISUALIZAR_AGENDA_GLOBAL",
-            ],
-            ["Professor"] = ["VISUALIZAR_AULA", "VISUALIZAR_TURMA", "VISUALIZAR_CALENDARIO", "VISUALIZAR_COMPROMISSOS"],
-            ["Comercial"] = ["VISUALIZAR_PRE_ALUNO", "CRIAR_PRE_ALUNO", "VISUALIZAR_COMPROMISSOS", "CRIAR_COMPROMISSO"],
-            ["Secretaria"] = ["VISUALIZAR_MATRICULA", "CRIAR_MATRICULA", "VISUALIZAR_ALUNO", "VISUALIZAR_COMPROMISSOS"],
-            ["Financeiro"] = ["VISUALIZAR_PARCELA", "VISUALIZAR_MOVIMENTACAO_FINANCEIRA", "VISUALIZAR_COMPROMISSOS"],
-            ["Coordenador"] = ["VISUALIZAR_TURMA", "VISUALIZAR_AULA", "VISUALIZAR_REPOSICAO", "VISUALIZAR_DASHBOARD_GERAL", "VISUALIZAR_COMPROMISSOS"],
-        };
 
     private readonly IEscolaRepository _escolas;
     private readonly IUsuarioRepository _usuarios;
     private readonly IPerfilRepository _perfis;
     private readonly IPermissaoRepository _permissoes;
     private readonly IPerfilPermissaoRepository _perfilPermissoes;
+    private readonly ITemplatePermissoesRepository _templatePermissoes;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
@@ -46,6 +30,7 @@ public sealed class EscolasService : IEscolasService
         IPerfilRepository perfis,
         IPermissaoRepository permissoes,
         IPerfilPermissaoRepository perfilPermissoes,
+        ITemplatePermissoesRepository templatePermissoes,
         IUnitOfWork unitOfWork,
         IMapper mapper)
     {
@@ -54,6 +39,7 @@ public sealed class EscolasService : IEscolasService
         _perfis = perfis;
         _permissoes = permissoes;
         _perfilPermissoes = perfilPermissoes;
+        _templatePermissoes = templatePermissoes;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
     }
@@ -157,7 +143,8 @@ public sealed class EscolasService : IEscolasService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         var perfilAdmin = perfisCriados.First(p => string.Equals(p.Nome, AdminPerfilNome, StringComparison.OrdinalIgnoreCase));
 
-        var nomesPermissaoNecessarias = PermissoesPadraoPorPerfil.Values
+        var permissoesPorPerfil = await _templatePermissoes.ObterPermissoesDeTemplateAsync(cancellationToken);
+        var nomesPermissaoNecessarias = permissoesPorPerfil.Values
             .SelectMany(x => x)
             .Append("GERENCIAR_ESCOLAS")
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -168,7 +155,7 @@ public sealed class EscolasService : IEscolasService
             var vinculos = new List<PerfilPermissao>();
             foreach (var perfil in perfisCriados)
             {
-                if (!PermissoesPadraoPorPerfil.TryGetValue(perfil.Nome, out var nomesPerfil))
+                if (!permissoesPorPerfil.TryGetValue(perfil.Nome, out var nomesPerfil))
                 {
                     continue;
                 }

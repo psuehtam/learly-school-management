@@ -190,6 +190,14 @@ export const SUPER_ADMIN_MENU: MenuEntry[] = [
     icon: <IconBuilding />,
     permission: "VISUALIZAR_ESCOLAS",
   },
+  {
+    type: "item",
+    key: "templates-permissoes",
+    label: "Templates de permissões",
+    href: "/super-admin/templates",
+    icon: <IconSettings />,
+    permission: "VISUALIZAR_ESCOLAS",
+  },
 ];
 
 // ─── Extração de permissões por rota (para route-access.ts) ───────────────────

@@ -1,6 +1,9 @@
 using Learly.API.Auth;
 using Learly.API.Auth.Filters;
-using Learly.Application.Services.Common;
+using Learly.API.Http;
+using Learly.API.Mapping;
+using Learly.Application.Contracts.Escolas.Requests;
+using Learly.Application.Contracts.Escolas.Responses;
 using Learly.Application.Services.Escolas;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,87 +26,25 @@ public sealed class EscolasController : ControllerBase
     /// Super Admin: todas as escolas. Usuário de escola: apenas a própria (tenant).
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> Listar(CancellationToken ct)
+    [ServiceFilter(typeof(EscolaListagemAuthorizeFilter))]
+    public async Task<ActionResult<IReadOnlyList<EscolaListItemResponse>>> Listar(
+        CancellationToken cancellationToken)
     {
-        var rawUserContext = this.GetUserContext();
-        if (!rawUserContext.IsSuperAdmin &&
-            !rawUserContext.HasPermission("VISUALIZAR_ESCOLAS") &&
-            !rawUserContext.HasPermission("GERENCIAR_ESCOLAS"))
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
-            {
-                Title = "Permissao insuficiente",
-                Detail = "Permissao necessaria: VISUALIZAR_ESCOLAS ou GERENCIAR_ESCOLAS",
-                Status = StatusCodes.Status403Forbidden
-            });
-        }
-
-        var uc = ToAppUserContext(rawUserContext);
-        var escolas = await _escolasService.ListarAsync(uc, ct);
-        if (!uc.IsSuperAdmin && string.IsNullOrWhiteSpace(uc.CodigoEscola))
+        var listagem = await _escolasService.ListarAsync(AppUserContextMapper.From(HttpContext.GetUserContext()), cancellationToken);
+        if (listagem.ContextoTenantInvalido)
         {
             return Forbid();
         }
-        return Ok(escolas);
+
+        return Ok(listagem.Itens);
     }
 
     /// <summary>Apenas Super Admin pode criar escolas (novo tenant).</summary>
     [HttpPost]
     [SuperAdminOnly]
-    public async Task<IActionResult> Criar([FromBody] CriarEscolaRequest body, CancellationToken ct)
+    public async Task<IActionResult> Criar([FromBody] CriarEscolaRequest body, CancellationToken cancellationToken)
     {
-        var result = await _escolasService.CriarAsync(new CriarEscolaInput
-        {
-            CodigoEscola = body.CodigoEscola,
-            NomeFantasia = body.NomeFantasia,
-            RazaoSocial = body.RazaoSocial,
-            Cnpj = body.Cnpj,
-            AdminNomeCompleto = body.AdminNomeCompleto,
-            AdminEmail = body.AdminEmail,
-            AdminPassword = body.AdminPassword
-        }, ct);
-        if (!result.Success || result.Escola is null)
-        {
-            var isConflict =
-                string.Equals(result.Error, "Ja existe escola com este codigo.", StringComparison.Ordinal) ||
-                string.Equals(result.Error, "Ja existe usuario com este email.", StringComparison.Ordinal);
-            if (isConflict)
-            {
-                return Conflict(new ProblemDetails
-                {
-                    Title = "Conflito",
-                    Detail = result.Error,
-                    Status = StatusCodes.Status409Conflict
-                });
-            }
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Requisicao invalida",
-                Detail = result.Error ?? "Falha ao criar escola.",
-                Status = StatusCodes.Status400BadRequest
-            });
-        }
-
-        return StatusCode(StatusCodes.Status201Created, result.Escola);
+        var resultado = await _escolasService.CriarAsync(body, cancellationToken);
+        return resultado.ToActionResult(this);
     }
-
-    private static AppUserContext ToAppUserContext(UserContext uc) => new()
-    {
-        UserId = uc.UserId,
-        Perfil = uc.Perfil,
-        CodigoEscola = uc.CodigoEscola,
-        IsSuperAdmin = uc.IsSuperAdmin,
-        Permissions = uc.Permissions
-    };
-}
-
-public sealed class CriarEscolaRequest
-{
-    public string CodigoEscola { get; set; } = string.Empty;
-    public string NomeFantasia { get; set; } = string.Empty;
-    public string? RazaoSocial { get; set; }
-    public string? Cnpj { get; set; }
-    public string? AdminNomeCompleto { get; set; }
-    public string AdminEmail { get; set; } = string.Empty;
-    public string AdminPassword { get; set; } = string.Empty;
 }

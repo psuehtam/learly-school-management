@@ -3,9 +3,10 @@
 -- Versão: 1.0
 --
 -- ORDEM DE EXECUÇÃO:
---   1. db.sql          → cria o schema (tabelas e índices)
---   2. permissoes.sql  → insere todas as permissões do sistema
---   3. insert.sql      → este arquivo (Super Admin + seed de testes)
+--   1. db.sql                          → cria o schema (tabelas e índices)
+--   2. permissoes.sql                  → insere todas as permissões do sistema
+--   3. perfis_permissoes_template.sql  → templates globais perfil/permissão (novas escolas)
+--   4. insert.sql                      → este arquivo (Super Admin + seed de testes)
 --
 -- CREDENCIAIS DE ACESSO (testes):
 --   Super Admin  → email: admin          | senha: admin  | escola: SYSTEM
@@ -108,7 +109,11 @@ SELECT e.id, 'Comercial', 'Pré-alunos e contratos', 'Ativo'
 FROM escolas e WHERE e.codigo_escola = 'ESCOLA01';
 
 -- ============================================================
--- BLOCO 4 — PERMISSÕES DOS PERFIS
+-- BLOCO 4 — PERMISSÕES DOS PERFIS (ESCOLA01)
+-- Grava em perfis / perfil_permissoes (dados do tenant), não em perfis_template.
+-- Os templates globais (perfis_permissoes_template.sql) espelham o padrão de NOVAS
+-- escolas (EscolasService); este bloco usa conjuntos maiores ou distintos só para
+-- testes e cenários do seed (ex.: Admin com todas as permissoes, Coordenador amplo).
 -- ============================================================
 
 -- Administrador: todas as permissões do sistema

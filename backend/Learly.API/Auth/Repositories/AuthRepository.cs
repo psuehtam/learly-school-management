@@ -1,5 +1,6 @@
 using Learly.API.Auth;
 using Learly.Domain.Entities;
+using Learly.Domain.Interfaces.Repositories;
 using Learly.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,16 +10,19 @@ public interface IAuthRepository
 {
     Task<LoginContext?> GetLoginContextAsync(string email, string? codigoEscola);
     Task<IReadOnlyList<string>> GetPermissoesAsync(int usuarioId, int perfilId);
+    Task<bool> GarantirPermissoesPadraoPerfilAsync(int perfilId, string nomePerfil, CancellationToken cancellationToken = default);
     Task UpdateSenhaAsync(Usuario usuario, string senhaHash);
 }
 
 public sealed class AuthRepository : IAuthRepository
 {
     private readonly LearlyDbContext _db;
+    private readonly ITemplatePermissoesRepository _templatePermissoes;
 
-    public AuthRepository(LearlyDbContext db)
+    public AuthRepository(LearlyDbContext db, ITemplatePermissoesRepository templatePermissoes)
     {
         _db = db;
+        _templatePermissoes = templatePermissoes;
     }
 
     public async Task<LoginContext?> GetLoginContextAsync(string email, string? codigoEscola)
@@ -109,6 +113,57 @@ public sealed class AuthRepository : IAuthRepository
             .ToListAsync();
 
         return permissoesPerfil.Concat(permissoesUsuario).Distinct().ToList();
+    }
+
+    public async Task<bool> GarantirPermissoesPadraoPerfilAsync(int perfilId, string nomePerfil, CancellationToken cancellationToken = default)
+    {
+        var permissoesPorPerfil = await _templatePermissoes.ObterPermissoesDeTemplateAsync(cancellationToken);
+        if (!permissoesPorPerfil.TryGetValue(nomePerfil, out var nomesPermissao) || nomesPermissao.Count == 0)
+        {
+            return false;
+        }
+
+        var nomesPermissaoLista = nomesPermissao
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (nomesPermissaoLista.Count == 0)
+        {
+            return false;
+        }
+
+        var idsPermissao = await _db.Permissoes
+            .Where(p => nomesPermissaoLista.Contains(p.Nome))
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+        if (idsPermissao.Count == 0)
+        {
+            return false;
+        }
+
+        var idsExistentes = await _db.PerfilPermissoes
+            .Where(pp => pp.PerfilId == perfilId)
+            .Select(pp => pp.PermissaoId)
+            .ToListAsync(cancellationToken);
+
+        var idsFaltantes = idsPermissao
+            .Distinct()
+            .Except(idsExistentes)
+            .ToList();
+        if (idsFaltantes.Count == 0)
+        {
+            return false;
+        }
+
+        var vinculos = idsFaltantes.Select(id => new PerfilPermissao
+        {
+            PerfilId = perfilId,
+            PermissaoId = id
+        });
+        _db.PerfilPermissoes.AddRange(vinculos);
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task UpdateSenhaAsync(Usuario usuario, string senhaHash)

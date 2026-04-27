@@ -61,9 +61,17 @@ function resolveErrorMessage(data: unknown, fallback: string): string {
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {
+  if (response.status === 204 || response.status === 205) {
+    return null;
+  }
+
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
-    return response.json();
+    const text = await response.text();
+    if (!text.trim()) {
+      return null;
+    }
+    return JSON.parse(text) as unknown;
   }
 
   const text = await response.text();

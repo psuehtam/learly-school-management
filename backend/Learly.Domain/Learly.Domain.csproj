@@ -6,4 +6,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Permite que Application/API/Infra/Testes instanciem e persistam entidades sem expor setters publicamente. -->
+    <InternalsVisibleTo Include="Learly.Application" />
+    <InternalsVisibleTo Include="Learly.Infrastructure" />
+    <InternalsVisibleTo Include="Learly.API" />
+    <InternalsVisibleTo Include="Learly.API.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -1,43 +1,57 @@
 import { apiRequest } from "@/lib/api/client";
-import type { Usuario, Perfil } from "@/types/usuario";
 
-export async function listarUsuarios(): Promise<Usuario[]> {
-  return apiRequest<Usuario[]>("/api/usuarios");
+export type UsuarioMinhaEscola = {
+  id: number;
+  nomeCompleto: string;
+  email: string;
+  perfilId: number;
+  perfilNome: string;
+  status: "Ativo" | "Inativo";
+};
+
+export type PerfilMinhaEscola = {
+  id: number;
+  nome: string;
+  status: "Ativo" | "Inativo";
+};
+
+export type CriarUsuarioMinhaEscolaPayload = {
+  nomeCompleto: string;
+  email: string;
+  senha: string;
+  perfilId: number;
+};
+
+export type EditarUsuarioMinhaEscolaPayload = {
+  nomeCompleto: string;
+  email: string;
+  perfilId: number;
+  status: "Ativo" | "Inativo";
+};
+
+export async function listarUsuariosMinhaEscola(): Promise<UsuarioMinhaEscola[]> {
+  return apiRequest<UsuarioMinhaEscola[]>("/api/usuarios/minha-escola");
 }
 
-export async function buscarUsuario(id: number): Promise<Usuario> {
-  return apiRequest<Usuario>(`/api/usuarios/${id}`);
+export async function listarPerfisMinhaEscola(): Promise<PerfilMinhaEscola[]> {
+  return apiRequest<PerfilMinhaEscola[]>("/api/usuarios/minha-escola/perfis");
 }
 
-export async function criarUsuario(dados: Partial<Usuario> & { senha: string }): Promise<Usuario> {
-  return apiRequest<Usuario>("/api/usuarios", { method: "POST", body: dados });
-}
-
-export async function editarUsuario(id: number, dados: Partial<Usuario>): Promise<Usuario> {
-  return apiRequest<Usuario>(`/api/usuarios/${id}`, { method: "PUT", body: dados });
-}
-
-export async function inativarUsuario(id: number): Promise<void> {
-  await apiRequest<void>(`/api/usuarios/${id}/inativar`, { method: "PATCH" });
-}
-
-export async function listarPerfis(): Promise<Perfil[]> {
-  return apiRequest<Perfil[]>("/api/perfis");
-}
-
-export async function listarPermissoes(): Promise<{ id: number; nome: string; descricao: string }[]> {
-  return apiRequest<{ id: number; nome: string; descricao: string }[]>("/api/permissoes");
-}
-
-export async function atribuirPermissao(usuarioId: number, permissaoId: number): Promise<void> {
-  await apiRequest<void>(`/api/usuarios/${usuarioId}/permissoes`, {
+export async function criarUsuarioMinhaEscola(
+  dados: CriarUsuarioMinhaEscolaPayload,
+): Promise<{ id: number }> {
+  return apiRequest<{ id: number }>("/api/usuarios/minha-escola", {
     method: "POST",
-    body: { permissaoId },
+    body: dados,
   });
 }
 
-export async function revogarPermissao(usuarioId: number, permissaoId: number): Promise<void> {
-  await apiRequest<void>(`/api/usuarios/${usuarioId}/permissoes/${permissaoId}`, {
-    method: "DELETE",
+export async function editarUsuarioMinhaEscola(
+  usuarioId: number,
+  dados: EditarUsuarioMinhaEscolaPayload,
+): Promise<void> {
+  await apiRequest<void>(`/api/usuarios/minha-escola/${usuarioId}`, {
+    method: "PUT",
+    body: dados,
   });
 }

@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Learly.API\Learly.API.csproj" />
+    <ProjectReference Include="..\Learly.Application\Learly.Application.csproj" />
     <ProjectReference Include="..\Learly.Infrastructure\Learly.Infrastructure.csproj" />
     <ProjectReference Include="..\Learly.Domain\Learly.Domain.csproj" />
   </ItemGroup>

@@ -15,6 +15,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
     private static readonly InMemoryDatabaseRoot DatabaseRoot = new();
     public static int AulaAgendadaId { get; private set; }
     public static int AulaRealizadaId { get; private set; }
+    public static int PerfilProfessorTenantId { get; private set; }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -68,15 +69,23 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         var pGerenciar = new Permissao { Nome = "GERENCIAR_ESCOLAS" };
         var pVisualizar = new Permissao { Nome = "VISUALIZAR_ESCOLAS" };
+        var pCriarUsuario = new Permissao { Nome = "CRIAR_USUARIO" };
+        var pVisualizarUsuario = new Permissao { Nome = "VISUALIZAR_USUARIO" };
+        var pEditarUsuario = new Permissao { Nome = "EDITAR_USUARIO" };
         var pVisualizarAula = new Permissao { Nome = "VISUALIZAR_AULA" };
         var pEditarAula = new Permissao { Nome = "EDITAR_AULA" };
         var pCancelarAula = new Permissao { Nome = "CANCELAR_AULA" };
-        db.Permissoes.AddRange(pGerenciar, pVisualizar, pVisualizarAula, pEditarAula, pCancelarAula);
+        db.Permissoes.AddRange(pGerenciar, pVisualizar, pCriarUsuario, pVisualizarUsuario, pEditarUsuario, pVisualizarAula, pEditarAula, pCancelarAula);
         db.SaveChanges();
+
+        PerfilProfessorTenantId = perfilProfessor.Id;
 
         db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilSuper.Id, PermissaoId = pGerenciar.Id });
         db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilSuper.Id, PermissaoId = pVisualizar.Id });
         db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilComum.Id, PermissaoId = pVisualizar.Id });
+        db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilComum.Id, PermissaoId = pCriarUsuario.Id });
+        db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilComum.Id, PermissaoId = pVisualizarUsuario.Id });
+        db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilComum.Id, PermissaoId = pEditarUsuario.Id });
         db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilComum.Id, PermissaoId = pVisualizarAula.Id });
         db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilComum.Id, PermissaoId = pEditarAula.Id });
         db.PerfilPermissoes.Add(new PerfilPermissao { PerfilId = perfilComum.Id, PermissaoId = pCancelarAula.Id });

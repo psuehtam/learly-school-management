@@ -1,32 +1,30 @@
 using Learly.Domain.Entities;
+using Learly.Infrastructure.Data.Configurations;
 using Microsoft.EntityFrameworkCore;
 
-namespace Learly.Infrastructure.Data
+namespace Learly.Infrastructure.Data;
+
+public class LearlyDbContext : DbContext
 {
-    public class LearlyDbContext : DbContext
+    public LearlyDbContext(DbContextOptions<LearlyDbContext> options) : base(options)
     {
-        public LearlyDbContext(DbContextOptions<LearlyDbContext> options) : base(options) 
-        { 
-        }
+    }
 
-        public DbSet<Usuario> Usuarios { get; set; }
-        public DbSet<Escola> Escolas { get; set; }
-        public DbSet<Perfil> Perfis { get; set; }
-        public DbSet<Permissao> Permissoes { get; set; }
-        public DbSet<PerfilPermissao> PerfilPermissoes { get; set; }
-        public DbSet<UsuarioPermissao> UsuarioPermissoes { get; set; }
-        public DbSet<Turma> Turmas { get; set; }
-        public DbSet<Aula> Aulas { get; set; }
+    public DbSet<Usuario> Usuarios => Set<Usuario>();
+    public DbSet<Escola> Escolas => Set<Escola>();
+    public DbSet<Perfil> Perfis => Set<Perfil>();
+    public DbSet<Permissao> Permissoes => Set<Permissao>();
+    public DbSet<PerfilPermissao> PerfilPermissoes => Set<PerfilPermissao>();
+    public DbSet<PerfilTemplate> PerfisTemplate => Set<PerfilTemplate>();
+    public DbSet<PerfilPermissaoTemplate> PerfilPermissoesTemplate => Set<PerfilPermissaoTemplate>();
+    public DbSet<UsuarioPermissao> UsuarioPermissoes => Set<UsuarioPermissao>();
+    public DbSet<Turma> Turmas => Set<Turma>();
+    public DbSet<Aula> Aulas => Set<Aula>();
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            base.OnModelCreating(modelBuilder);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<PerfilPermissao>()
-                .HasKey(pp => new { pp.PerfilId, pp.PermissaoId });
-
-            modelBuilder.Entity<UsuarioPermissao>()
-                .HasKey(up => new { up.UsuarioId, up.PermissaoId });
-        }
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(LearlyDbContext).Assembly);
     }
 }

@@ -1,40 +1,83 @@
-using System.ComponentModel.DataAnnotations.Schema;
+using Learly.Domain.Exceptions;
 
 namespace Learly.Domain.Entities;
 
-[Table("turmas")]
-public class Turma
+public sealed class Turma
 {
-    [Column("id")]
-    public int Id { get; set; }
+    public int Id { get; internal set; }
 
-    [Column("escola_id")]
-    public int EscolaId { get; set; }
+    public int EscolaId { get; internal set; }
 
-    [Column("professor_id")]
-    public int ProfessorId { get; set; }
+    public int ProfessorId { get; internal set; }
 
-    [Column("livro_id")]
-    public int LivroId { get; set; }
+    public int LivroId { get; internal set; }
 
-    [Column("nome")]
-    public string Nome { get; set; } = string.Empty;
+    private string _nome = string.Empty;
 
-    [Column("sala")]
-    public string? Sala { get; set; }
+    public string Nome
+    {
+        get => _nome;
+        internal set => _nome = ValidarNome(value);
+    }
 
-    [Column("horario")]
-    public TimeOnly? Horario { get; set; }
+    private string? _sala;
 
-    [Column("data_inicio")]
-    public DateOnly? DataInicio { get; set; }
+    public string? Sala
+    {
+        get => _sala;
+        internal set => _sala = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
 
-    [Column("data_termino_prevista")]
-    public DateOnly? DataTerminoPrevista { get; set; }
+    public TimeOnly? Horario { get; internal set; }
 
-    [Column("observacoes")]
-    public string? Observacoes { get; set; }
+    public DateOnly? DataInicio { get; internal set; }
 
-    [Column("status")]
-    public string Status { get; set; } = "Em Espera";
+    public DateOnly? DataTerminoPrevista { get; internal set; }
+
+    private string? _observacoes;
+
+    public string? Observacoes
+    {
+        get => _observacoes;
+        internal set => _observacoes = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private string _status = "Em Espera";
+
+    public string Status
+    {
+        get => _status;
+        internal set => _status = ValidarStatus(value);
+    }
+
+    public void DefinirPeriodoLetivo(DateOnly? inicio, DateOnly? terminoPrevisto)
+    {
+        if (inicio is not null && terminoPrevisto is not null && terminoPrevisto < inicio)
+            throw new DomainException("Data de termino prevista nao pode ser anterior a data de inicio.");
+
+        DataInicio = inicio;
+        DataTerminoPrevista = terminoPrevisto;
+    }
+
+    public void AlterarIdentificacao(string nome, string? sala)
+    {
+        Nome = nome;
+        Sala = sala;
+    }
+
+    private static string ValidarNome(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new DomainException("Nome da turma e obrigatorio.");
+
+        return value.Trim();
+    }
+
+    private static string ValidarStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new DomainException("Status da turma e obrigatorio.");
+
+        return value.Trim();
+    }
 }

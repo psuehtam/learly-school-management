@@ -13,4 +13,5 @@ public sealed record PreAlunoListItemResponse(
     string? FormaPagamento,
     string OrigemCaptacao,
     decimal? ValorMaterial,
-    decimal ValorMatricula);
+    decimal ValorMatricula,
+    string? ObservacoesComerciais);

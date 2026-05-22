@@ -127,8 +127,19 @@ function ModalShell({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const requestClose = () => {
+    if (typeof window !== "undefined" && window.confirm("Deseja fechar esta janela?")) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) requestClose();
+      }}
+    >
       <div
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -136,9 +147,9 @@ function ModalShell({
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
           <div>
             <h2 className="text-base font-semibold text-zinc-900">{title}</h2>
-            {subtitle ? <p className="text-xs text-zinc-500">{subtitle}</p> : null}
+            {subtitle ? <p className="text-xs font-medium text-zinc-700">{subtitle}</p> : null}
           </div>
-          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600">
+          <button type="button" onClick={requestClose} className="text-zinc-600 hover:text-zinc-900">
             ✕
           </button>
         </div>

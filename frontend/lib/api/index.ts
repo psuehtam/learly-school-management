@@ -15,3 +15,4 @@ export * from "./matriculas";
 
 export * from "./compromissos";
 export * from "./configuracoes";
+export * from "./sistema";

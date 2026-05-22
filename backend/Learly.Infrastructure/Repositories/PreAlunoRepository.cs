@@ -32,11 +32,11 @@ internal sealed class PreAlunoRepository(LearlyDbContext db) : RepositoryBase<Pr
         if (lista.Count == 0)
             return Array.Empty<PreAlunoListagemItem>();
 
-        var respIds = lista.Select(p => p.ResponsavelId).Distinct().ToList();
+        var preRespIds = lista.Select(p => p.PreResponsavelId).Distinct().ToList();
         var livIds = lista.Select(p => p.LivroInteresseId).Distinct().ToList();
 
-        var respostasResp = await Db.Responsaveis.AsNoTracking()
-            .Where(r => r.EscolaId == escolaId && respIds.Contains(r.Id))
+        var preResponsaveis = await Db.PreResponsaveis.AsNoTracking()
+            .Where(r => r.EscolaId == escolaId && preRespIds.Contains(r.Id))
             .ToDictionaryAsync(r => r.Id, cancellationToken);
 
         var respostasLivros = await Db.Livros.AsNoTracking()
@@ -46,12 +46,12 @@ internal sealed class PreAlunoRepository(LearlyDbContext db) : RepositoryBase<Pr
         var itens = new List<PreAlunoListagemItem>(lista.Count);
         foreach (var p in lista)
         {
-            respostasResp.TryGetValue(p.ResponsavelId, out var resp);
+            preResponsaveis.TryGetValue(p.PreResponsavelId, out var preResp);
             respostasLivros.TryGetValue(p.LivroInteresseId, out var liv);
 
-            var nomeResp = resp is null
-                ? $"Responsavel #{p.ResponsavelId}"
-                : $"{resp.Nome.Trim()} {resp.Sobrenome.Trim()}".Trim();
+            var nomeResp = preResp is null
+                ? $"Responsavel #{p.PreResponsavelId}"
+                : $"{preResp.Nome.Trim()} {preResp.Sobrenome.Trim()}".Trim();
 
             itens.Add(new PreAlunoListagemItem(
                 p.Id,
@@ -66,7 +66,8 @@ internal sealed class PreAlunoRepository(LearlyDbContext db) : RepositoryBase<Pr
                 p.FormaPagamento,
                 p.OrigemCaptacao,
                 p.ValorMaterial,
-                p.ValorMatricula));
+                p.ValorMatricula,
+                p.ObservacoesComerciais));
         }
 
         return itens;
@@ -80,22 +81,24 @@ internal sealed class PreAlunoRepository(LearlyDbContext db) : RepositoryBase<Pr
         if (p is null)
             return null;
 
-        var resp = await Db.Responsaveis.AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == p.ResponsavelId && r.EscolaId == escolaId, cancellationToken);
+        var preResp = await Db.PreResponsaveis.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == p.PreResponsavelId && r.EscolaId == escolaId, cancellationToken);
 
         var liv = await Db.Livros.AsNoTracking()
             .FirstOrDefaultAsync(l => l.Id == p.LivroInteresseId && l.EscolaId == escolaId, cancellationToken);
 
-        if (resp is null || liv is null)
+        if (preResp is null || liv is null)
             return null;
 
         return new PreAlunoDetalheItem(
             p.Id,
             p.EscolaId,
+            p.PreResponsavelId,
             p.ResponsavelId,
-            resp.TipoPessoa,
-            resp.CpfCnpj,
-            $"{resp.Nome.Trim()} {resp.Sobrenome.Trim()}".Trim(),
+            preResp.TipoPessoa,
+            preResp.CpfCnpj,
+            $"{preResp.Nome.Trim()} {preResp.Sobrenome.Trim()}".Trim(),
+            preResp.Telefone,
             p.Nome.Trim(),
             p.Sobrenome.Trim(),
             p.DataNascimento,
@@ -118,6 +121,8 @@ internal sealed class PreAlunoRepository(LearlyDbContext db) : RepositoryBase<Pr
             p.TransporteCidade,
             p.TransporteUf,
             p.ObservacoesComerciais,
+            p.EProprioResponsavel,
+            p.AlunoCpf,
             p.Status,
             p.AlunoId,
             p.CriadoPorUsuarioId,

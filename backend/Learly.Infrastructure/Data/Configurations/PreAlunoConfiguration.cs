@@ -14,6 +14,7 @@ public sealed class PreAlunoConfiguration : IEntityTypeConfiguration<PreAluno>
         builder.Property(p => p.Id).HasColumnName("id").ValueGeneratedOnAdd();
 
         builder.Property(p => p.EscolaId).HasColumnName("escola_id");
+        builder.Property(p => p.PreResponsavelId).HasColumnName("pre_responsavel_id");
         builder.Property(p => p.ResponsavelId).HasColumnName("responsavel_id");
 
         builder.Property(p => p.Nome).HasColumnName("nome").HasMaxLength(100).IsRequired();
@@ -42,6 +43,8 @@ public sealed class PreAlunoConfiguration : IEntityTypeConfiguration<PreAluno>
         builder.Property(p => p.TransporteUf).HasColumnName("transporte_uf").HasMaxLength(2);
 
         builder.Property(p => p.ObservacoesComerciais).HasColumnName("observacoes_comerciais").HasColumnType("text");
+        builder.Property(p => p.EProprioResponsavel).HasColumnName("e_proprio_responsavel");
+        builder.Property(p => p.AlunoCpf).HasColumnName("aluno_cpf").HasMaxLength(14);
 
         builder.Property(p => p.Status)
             .HasColumnName("status")

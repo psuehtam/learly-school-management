@@ -597,4 +597,81 @@ public static class ServiceResultExtensions
             })
         };
     }
+
+    public static IActionResult ToActionResult(this PrepararConversaoResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Dados is not null)
+            return c.Ok(r.Dados);
+
+        return r.Falha switch
+        {
+            PrepararConversaoFalha.AcessoNegado => c.Forbid(),
+            PrepararConversaoFalha.NaoEncontrado => c.NotFound(new ProblemDetails
+            {
+                Title = "Nao encontrado",
+                Detail = r.Mensagem,
+                Status = StatusCodes.Status404NotFound
+            }),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao preparar conversao.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this PreAlunoAprovacaoResultado r, ControllerBase c, string fallbackTitle)
+    {
+        if (r.Ok && r.AlunoId.HasValue && r.MatriculaId.HasValue)
+        {
+            return c.Ok(new AprovarPreAlunoResponse(r.AlunoId.Value, r.MatriculaId.Value));
+        }
+
+        return r.Falha switch
+        {
+            PreAlunoAprovacaoFalha.AcessoNegado => c.Forbid(),
+            PreAlunoAprovacaoFalha.NaoEncontrado => c.NotFound(new ProblemDetails
+            {
+                Title = "Nao encontrado",
+                Detail = r.Mensagem,
+                Status = StatusCodes.Status404NotFound
+            }),
+            PreAlunoAprovacaoFalha.Conflito => c.Conflict(new ProblemDetails
+            {
+                Title = "Conflito",
+                Detail = r.Mensagem ?? fallbackTitle,
+                Status = StatusCodes.Status409Conflict
+            }),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? fallbackTitle,
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this PreAlunoDocumentoUploadResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Documento is not null)
+            return c.Ok(r.Documento);
+
+        return r.Falha switch
+        {
+            PreAlunoDocumentoUploadFalha.AcessoNegado => c.Forbid(),
+            PreAlunoDocumentoUploadFalha.NaoEncontrado => c.NotFound(new ProblemDetails
+            {
+                Title = "Nao encontrado",
+                Detail = r.Mensagem,
+                Status = StatusCodes.Status404NotFound
+            }),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao enviar documento.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
 }

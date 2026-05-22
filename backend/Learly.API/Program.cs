@@ -48,6 +48,10 @@ if (!app.Environment.IsEnvironment("Testing"))
         ("20260422234757_InitialCleanArchitecture",                  "10.0.0"),
         ("20260424012952_PerfisPermissoesTemplate",                  "10.0.0"),
         ("20260504121858_MatriculasTurmaOpcionalStatusEmEspera",     "10.0.0"),
+        ("20260514000000_ContratosModule",                           "10.0.0"),
+        ("20260516120000_ContratosAlignColumns",                     "10.0.0"),
+        ("20260521120000_PreAlunoDocumentosModule",                 "10.0.0"),
+        ("20260521140000_PreResponsaveisModule",                    "10.0.0"),
     ];
 
     foreach (var (id, version) in migracoesPrevias)
@@ -55,24 +59,6 @@ if (!app.Environment.IsEnvironment("Testing"))
         db.Database.ExecuteSqlRaw(
             "INSERT IGNORE INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`) VALUES ({0}, {1})",
             id, version);
-    }
-
-    // Contratos: marcar ContratosModule só se a tabela já existir (setup.sql), para não recriar.
-    // ContratosAlignColumns roda via Migrate() e corrige schema legado (coluna template).
-    var contratosJaExistem = db.Database.SqlQueryRaw<int>(
-            """
-            SELECT COUNT(*) AS Value
-            FROM information_schema.tables
-            WHERE table_schema = DATABASE() AND table_name = 'contratos_templates'
-            """)
-        .AsEnumerable()
-        .FirstOrDefault() > 0;
-
-    if (contratosJaExistem)
-    {
-        db.Database.ExecuteSqlRaw(
-            "INSERT IGNORE INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`) VALUES ({0}, {1})",
-            "20260514000000_ContratosModule", "10.0.0");
     }
 
     db.Database.Migrate();

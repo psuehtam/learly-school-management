@@ -28,13 +28,18 @@ export type ModalProps = {
   className?: string;
   /** Se true, overlay, ESC, botão X e `requestClose` pedem confirmação antes de chamar `onClose`. */
   hasUnsavedChanges?: boolean;
+  /** Confirma ao clicar fora, ESC ou X (padrão: sim). */
+  confirmBeforeClose?: boolean;
   confirmDiscardMessage?: string;
+  confirmCloseMessage?: string;
   /** Impede qualquer fechamento (ex.: salvando). */
   closeDisabled?: boolean;
 };
 
-const DEFAULT_CONFIRM =
+const DEFAULT_DISCARD_CONFIRM =
   "Deseja sair sem salvar? As informações não salvas serão perdidas.";
+
+const DEFAULT_CLOSE_CONFIRM = "Deseja fechar esta janela?";
 
 export function Modal({
   open,
@@ -44,22 +49,37 @@ export function Modal({
   footer,
   className,
   hasUnsavedChanges = false,
+  confirmBeforeClose = true,
   confirmDiscardMessage,
+  confirmCloseMessage,
   closeDisabled = false,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const tryClose = useCallback(() => {
     if (closeDisabled) return;
-    if (!hasUnsavedChanges) {
+
+    const deveConfirmar = confirmBeforeClose || hasUnsavedChanges;
+    if (!deveConfirmar) {
       onClose();
       return;
     }
-    const msg = confirmDiscardMessage ?? DEFAULT_CONFIRM;
+
+    const msg = hasUnsavedChanges
+      ? (confirmDiscardMessage ?? DEFAULT_DISCARD_CONFIRM)
+      : (confirmCloseMessage ?? DEFAULT_CLOSE_CONFIRM);
+
     if (typeof window !== "undefined" && window.confirm(msg)) {
       onClose();
     }
-  }, [closeDisabled, hasUnsavedChanges, onClose, confirmDiscardMessage]);
+  }, [
+    closeDisabled,
+    confirmBeforeClose,
+    hasUnsavedChanges,
+    onClose,
+    confirmDiscardMessage,
+    confirmCloseMessage,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -85,14 +105,14 @@ export function Modal({
       >
         <div
           className={cn(
-            "bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden animate-in fade-in zoom-in-95",
+            "mx-4 flex max-h-[min(92vh,calc(100vh-2rem))] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl animate-in fade-in zoom-in-95",
             className,
           )}
           role="dialog"
           aria-modal="true"
         >
           {title && (
-            <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-6 py-4">
               <h2 className="text-lg font-semibold text-zinc-900">{title}</h2>
               <button
                 type="button"
@@ -116,9 +136,11 @@ export function Modal({
               </button>
             </div>
           )}
-          <div className="px-6 py-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+            {children}
+          </div>
           {footerNode ? (
-            <div className="flex items-center justify-end gap-2 border-t border-zinc-200 bg-zinc-50 px-6 py-4">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200 bg-zinc-50 px-6 py-4">
               {footerNode}
             </div>
           ) : null}

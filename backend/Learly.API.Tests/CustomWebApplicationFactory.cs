@@ -47,7 +47,9 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
     private static void Seed(LearlyDbContext db)
     {
         db.Matriculas.RemoveRange(db.Matriculas);
+        db.PreAlunoDocumentos.RemoveRange(db.PreAlunoDocumentos);
         db.PreAlunos.RemoveRange(db.PreAlunos);
+        db.PreResponsaveis.RemoveRange(db.PreResponsaveis);
         db.Alunos.RemoveRange(db.Alunos);
         db.Responsaveis.RemoveRange(db.Responsaveis);
         db.Aulas.RemoveRange(db.Aulas);

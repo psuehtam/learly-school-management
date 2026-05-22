@@ -30,7 +30,8 @@ public sealed class PreAluno
 
     public int Id { get; internal set; }
     public int EscolaId { get; internal set; }
-    public int ResponsavelId { get; internal set; }
+    public int PreResponsavelId { get; internal set; }
+    public int? ResponsavelId { get; internal set; }
 
     private string _nome = string.Empty;
     public string Nome
@@ -87,6 +88,9 @@ public sealed class PreAluno
     public string? TransporteUf { get; internal set; }
 
     public string? ObservacoesComerciais { get; internal set; }
+
+    public bool EProprioResponsavel { get; internal set; }
+    public string? AlunoCpf { get; internal set; }
 
     private string _status = Estados.EmNegociacao;
     public string Status

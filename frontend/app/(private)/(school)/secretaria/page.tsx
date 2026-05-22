@@ -13,16 +13,17 @@ import {
   criarAlunoComMatricula,
   listarMatriculas,
   listarPreAlunos,
-  aprovarMatricula,
   cancelarMatriculaById,
   vincularTurmaMatricula,
   type MatriculaListItem,
   type MatriculaStatus,
 } from "@/lib/api";
+import { ModalAprovarPreAluno } from "@/components/secretaria/ModalAprovarPreAluno";
 import type { User } from "@/lib/api/types";
 import type { PreAlunoListItem } from "@/types/comercial";
 import { getCurrentUser } from "@/lib/api/auth";
 import { hasPermission } from "@/lib/permissions";
+import { calcularIdadeAnos, dataHojeIsoLocal } from "@/lib/dates";
 import { buscarEnderecoPorCep } from "@/lib/viacep";
 import { applyBrazilMask, digitsOnly } from "@/utils";
 
@@ -151,21 +152,6 @@ function formatDateTime(value: string): string {
   });
 }
 
-function calcularIdade(dataNascimentoIso: string): number | null {
-  if (!dataNascimentoIso) return null;
-  const hoje = new Date();
-  const nascimento = new Date(dataNascimentoIso);
-  if (Number.isNaN(nascimento.getTime())) return null;
-
-  let idade = hoje.getFullYear() - nascimento.getFullYear();
-  const m = hoje.getMonth() - nascimento.getMonth();
-  if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
-    idade--;
-  }
-
-  return idade;
-}
-
 export default function SecretariaPage() {
   const [aba, setAba] = useState<AbaId>("espera");
   const [busca, setBusca] = useState("");
@@ -194,6 +180,7 @@ export default function SecretariaPage() {
   const [usuarioSessao, setUsuarioSessao] = useState<User | null>(null);
   const [preAlunosAguardando, setPreAlunosAguardando] = useState<PreAlunoListItem[]>([]);
   const [carregandoPreAlunos, setCarregandoPreAlunos] = useState(false);
+  const [preAlunoParaAprovar, setPreAlunoParaAprovar] = useState<PreAlunoListItem | null>(null);
 
   useEffect(() => {
     void getCurrentUser().then(setUsuarioSessao).catch(() => setUsuarioSessao(null));
@@ -220,19 +207,15 @@ export default function SecretariaPage() {
     void carregarPreAlunosAguardando();
   }, [carregarPreAlunosAguardando]);
 
-  const aprovarPreAluno = async (p: PreAlunoListItem) => {
-    if (!confirm(`Aprovar o pré-aluno ${p.nomeCompletoAluno}?`)) return;
-    setError(null);
-    try {
-      await aprovarMatricula(p.id);
-      await carregarPreAlunosAguardando();
-    } catch (e) {
-      setError(getApiErrorMessage(e, "Falha ao aprovar pre-aluno."));
-    }
+  const abrirAnalisePreAluno = (p: PreAlunoListItem) => {
+    setPreAlunoParaAprovar(p);
   };
 
   const podeAprovarPreAluno =
     usuarioSessao !== null && hasPermission(usuarioSessao, "APROVAR_MATRICULA");
+
+  const podeReprovarPreAluno =
+    usuarioSessao !== null && hasPermission(usuarioSessao, "REPROVAR_MATRICULA");
 
   const podeCriarAluno =
     usuarioSessao !== null && hasPermission(usuarioSessao, "CRIAR_ALUNO");
@@ -244,7 +227,7 @@ export default function SecretariaPage() {
     usuarioSessao !== null && hasPermission(usuarioSessao, "CANCELAR_MATRICULA");
 
   const statusSelecionado = STATUS_ABAS.find((s) => s.id === aba)?.status;
-  const idadeAluno = calcularIdade(novoAlunoForm.dataNascimento);
+  const idadeAluno = calcularIdadeAnos(novoAlunoForm.dataNascimento, dataHojeIsoLocal());
   const alunoMenor = idadeAluno !== null && idadeAluno < 18;
 
   const carregarMatriculas = useCallback(async () => {
@@ -592,8 +575,8 @@ export default function SecretariaPage() {
                       <td className="px-4 py-2 text-zinc-600">{p.nomeLivroInteresse}</td>
                       <td className="px-4 py-2 text-xs text-zinc-600">{p.tipoContrato}</td>
                       <td className="px-4 py-2 text-right">
-                        <Button size="sm" onClick={() => void aprovarPreAluno(p)}>
-                          Aprovar
+                        <Button size="sm" onClick={() => abrirAnalisePreAluno(p)}>
+                          Analisar / Aceite
                         </Button>
                       </td>
                     </tr>
@@ -868,7 +851,7 @@ export default function SecretariaPage() {
                   required
                   onChange={(e) => {
                     const novaData = e.target.value;
-                    const idade = calcularIdade(novaData);
+                    const idade = calcularIdadeAnos(novaData, dataHojeIsoLocal());
                     setNovoAlunoForm((p) => ({
                       ...p,
                       dataNascimento: novaData,
@@ -1209,6 +1192,20 @@ export default function SecretariaPage() {
           />
         </div>
       </Modal>
+
+      <ModalAprovarPreAluno
+        preAluno={preAlunoParaAprovar}
+        open={preAlunoParaAprovar !== null}
+        onClose={() => setPreAlunoParaAprovar(null)}
+        podeReprovar={podeReprovarPreAluno}
+        onAprovado={() => {
+          void carregarPreAlunosAguardando();
+          void carregarMatriculas();
+        }}
+        onReprovado={() => {
+          void carregarPreAlunosAguardando();
+        }}
+      />
     </div>
   );
 }

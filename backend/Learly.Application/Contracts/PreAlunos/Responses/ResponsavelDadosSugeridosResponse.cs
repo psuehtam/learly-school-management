@@ -1,0 +1,25 @@
+namespace Learly.Application.Contracts.PreAlunos.Responses;
+
+public sealed record ResponsavelDadosSugeridosResponse(
+    string Nome,
+    string Sobrenome,
+    string CpfCnpj,
+    string? Telefone,
+    string? Sexo,
+    string? GrauParentesco,
+    string? EstadoCivil,
+    string? CorRaca,
+    string? Nacionalidade,
+    string? DataNascimento,
+    string? NaturalidadeCidade,
+    string? NaturalidadeEstado,
+    string? RgNumero,
+    string? RgExpedicao,
+    string? RgOrgao,
+    string? Cep,
+    string? TipoLogradouro,
+    string? Logradouro,
+    string? Numero,
+    string? Complemento,
+    string? Bairro,
+    string? Municipio);

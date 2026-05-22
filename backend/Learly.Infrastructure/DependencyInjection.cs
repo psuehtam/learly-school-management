@@ -1,7 +1,9 @@
 using Learly.Domain.Interfaces.Persistence;
 using Learly.Domain.Interfaces.Repositories;
+using Learly.Domain.Interfaces.Services;
 using Learly.Infrastructure.Data;
 using Learly.Infrastructure.Repositories;
+using Learly.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,7 +45,10 @@ public static class DependencyInjection
         services.AddScoped<ICompromissoRepository, CompromissoRepository>();
         services.AddScoped<ITurmaRepository, TurmaRepository>();
         services.AddScoped<IMatriculaRepository, MatriculaRepository>();
+        services.AddScoped<IPreResponsavelRepository, PreResponsavelRepository>();
         services.AddScoped<IPreAlunoRepository, PreAlunoRepository>();
+        services.AddScoped<IPreAlunoDocumentoRepository, PreAlunoDocumentoRepository>();
+        services.AddScoped<IArquivoStorageService, LocalArquivoStorageService>();
         services.AddScoped<ILivroCatalogoRepository, LivroCatalogoRepository>();
         services.AddScoped<IPerfilRepository, PerfilRepository>();
         services.AddScoped<IPermissaoRepository, PermissaoRepository>();

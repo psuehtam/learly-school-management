@@ -60,14 +60,7 @@ export function formatarCategoriaCompromisso(raw: string): string {
   return comEspacos.charAt(0).toUpperCase() + comEspacos.slice(1).toLowerCase();
 }
 
-/** Data ISO (yyyy-MM-dd) → dd/MM/yyyy */
-export function formatarDataIsoPtBr(iso: string): string {
-  const parts = iso.trim().split("-");
-  if (parts.length !== 3) return iso;
-  const [y, m, d] = parts;
-  if (!y || !m || !d) return iso;
-  return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
-}
+export { formatarDataIsoPtBr } from "@/lib/dates";
 
 function montarSubtituloAulaTurmaLivro(a: Aula): string {
   const turma = a.turmaNome?.trim() || `Turma ${a.turmaId}`;

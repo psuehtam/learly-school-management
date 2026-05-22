@@ -28,7 +28,9 @@ public class LearlyDbContext : DbContext
     public DbSet<Livro> Livros => Set<Livro>();
     public DbSet<Capitulo> Capitulos => Set<Capitulo>();
     public DbSet<Responsavel> Responsaveis => Set<Responsavel>();
+    public DbSet<PreResponsavel> PreResponsaveis => Set<PreResponsavel>();
     public DbSet<PreAluno> PreAlunos => Set<PreAluno>();
+    public DbSet<PreAlunoDocumento> PreAlunoDocumentos => Set<PreAlunoDocumento>();
 
     public DbSet<ContratoTemplate> ContratosTemplates => Set<ContratoTemplate>();
     public DbSet<ContratoGerado> ContratosGerados => Set<ContratoGerado>();

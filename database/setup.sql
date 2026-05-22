@@ -1,19 +1,6 @@
--- ============================================================
--- LEARLY — SETUP COMPLETO DO BANCO DE DADOS
--- ============================================================
--- Versão  : 1.0
+-- LEARLY - SETUP BANCO DE DADOS
 -- Executar: mysql -u root -p < database/setup.sql
---
--- Este arquivo é autossuficiente:
---   • Cria o banco learly_db
---   • Cria todas as tabelas (sem DROP — banco precisa estar vazio)
---   • Popula permissões, templates de perfil e vínculos
---   • Cria a escola SYSTEM e o único usuário de acesso inicial
---
--- Credencial de acesso após execução:
---   E-mail : admin
---   Senha  : admin
--- ============================================================
+-- Obs.: instalação limpa (drop + setup.sql).
 
 CREATE DATABASE IF NOT EXISTS learly_db
   CHARACTER SET utf8mb4
@@ -107,6 +94,48 @@ CREATE TABLE IF NOT EXISTS responsaveis (
   PRIMARY KEY (id),
   UNIQUE KEY uk_responsavel_escola_cpf (escola_id, cpf_cnpj),
   CONSTRAINT fk_responsaveis_escola FOREIGN KEY (escola_id) REFERENCES escolas (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- pre_responsaveis
+-- Responsáveis em negociação no funil comercial (ainda não oficiais).
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pre_responsaveis (
+  id                        INT         NOT NULL AUTO_INCREMENT,
+  escola_id                 INT         NOT NULL,
+  tipo_pessoa               ENUM('Fisica','Juridica') NOT NULL,
+  cpf_cnpj                  VARCHAR(20) NOT NULL,
+  nome                      VARCHAR(100) NOT NULL,
+  sobrenome                 VARCHAR(100) NOT NULL,
+  telefone                  VARCHAR(20)  DEFAULT NULL,
+  grau_parentesco           ENUM('Pai','Mae','Avo Paterno','Avo Materno','Tio','Tia','Irmao','Irma','Conjuge','Outro') DEFAULT NULL,
+  sexo                      ENUM('Masculino','Feminino','Outro') DEFAULT NULL,
+  estado_civil              ENUM('Solteiro','Casado','Divorciado','Viuvo','Uniao Estavel') DEFAULT NULL,
+  data_nascimento           DATE         DEFAULT NULL,
+  cor_raca                  ENUM('Branca','Preta','Parda','Amarela','Indigena','Nao Declarado') DEFAULT NULL,
+  nacionalidade             VARCHAR(50)  DEFAULT NULL,
+  naturalidade_cidade       VARCHAR(100) DEFAULT NULL,
+  naturalidade_estado       CHAR(2)      DEFAULT NULL,
+  rg_numero                 VARCHAR(50)  DEFAULT NULL,
+  rg_expedicao              DATE         DEFAULT NULL,
+  rg_orgao                  VARCHAR(20)  DEFAULT NULL,
+  cep                       VARCHAR(10)  DEFAULT NULL,
+  tipo_logradouro           ENUM('Rua','Avenida','Travessa','Alameda','Estrada','Rodovia','Outro') DEFAULT NULL,
+  logradouro                VARCHAR(150) DEFAULT NULL,
+  numero                    VARCHAR(20)  DEFAULT NULL,
+  complemento               VARCHAR(100) DEFAULT NULL,
+  bairro                    VARCHAR(100) DEFAULT NULL,
+  municipio                 VARCHAR(100) DEFAULT NULL,
+  responsavel_convertido_id INT          DEFAULT NULL,
+  status                    ENUM('Em negociacao','Aguardando aprovacao','Aprovado','Recusado','Cancelado','Convertido') NOT NULL DEFAULT 'Em negociacao',
+  data_criacao              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  data_atualizacao          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_pre_resp_escola_cpf (escola_id, cpf_cnpj),
+  KEY idx_pre_resp_status    (escola_id, status),
+  KEY idx_pre_resp_conv      (responsavel_convertido_id),
+  CONSTRAINT fk_pre_resp_escola FOREIGN KEY (escola_id) REFERENCES escolas (id),
+  CONSTRAINT fk_pre_resp_conv   FOREIGN KEY (responsavel_convertido_id) REFERENCES responsaveis (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
@@ -561,7 +590,8 @@ CREATE TABLE IF NOT EXISTS turmas_capitulos_progresso (
 CREATE TABLE IF NOT EXISTS pre_alunos (
   id                         INT            NOT NULL AUTO_INCREMENT,
   escola_id                  INT            NOT NULL,
-  responsavel_id             INT            NOT NULL,
+  pre_responsavel_id         INT            NOT NULL,
+  responsavel_id             INT            DEFAULT NULL,
   nome                       VARCHAR(100)   NOT NULL,
   sobrenome                  VARCHAR(100)   NOT NULL,
   data_nascimento            DATE           NOT NULL,
@@ -583,6 +613,8 @@ CREATE TABLE IF NOT EXISTS pre_alunos (
   transporte_cidade          VARCHAR(100)   DEFAULT NULL,
   transporte_uf              CHAR(2)        DEFAULT NULL,
   observacoes_comerciais     TEXT           DEFAULT NULL,
+  e_proprio_responsavel      TINYINT     NOT NULL DEFAULT 0,
+  aluno_cpf                  VARCHAR(14)    DEFAULT NULL,
   status                     ENUM('Em negociacao','Aguardando aprovacao','Aprovado','Matriculado','Cancelado') NOT NULL DEFAULT 'Em negociacao',
   aluno_id                   INT            DEFAULT NULL,
   criado_por_usuario_id      INT            NOT NULL,
@@ -590,15 +622,41 @@ CREATE TABLE IF NOT EXISTS pre_alunos (
   data_atualizacao           DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_pa_escola_status   (escola_id, status),
+  KEY idx_pa_pre_resp        (escola_id, pre_responsavel_id),
   KEY idx_pa_responsavel     (escola_id, responsavel_id),
   KEY idx_pa_livro           (livro_interesse_id),
   KEY idx_pa_aluno           (aluno_id),
   KEY idx_pa_criado          (criado_por_usuario_id),
   CONSTRAINT fk_pa_escola   FOREIGN KEY (escola_id)             REFERENCES escolas      (id),
+  CONSTRAINT fk_pa_pre_resp FOREIGN KEY (pre_responsavel_id)    REFERENCES pre_responsaveis (id),
   CONSTRAINT fk_pa_resp     FOREIGN KEY (responsavel_id)        REFERENCES responsaveis (id),
   CONSTRAINT fk_pa_livro    FOREIGN KEY (livro_interesse_id)    REFERENCES livros       (id),
   CONSTRAINT fk_pa_aluno    FOREIGN KEY (aluno_id)              REFERENCES alunos       (id),
   CONSTRAINT fk_pa_criado   FOREIGN KEY (criado_por_usuario_id) REFERENCES usuarios     (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- pre_aluno_documentos
+-- Anexos do fluxo comercial → secretaria (tipos extensíveis via tipo_codigo).
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pre_aluno_documentos (
+  id                      INT            NOT NULL AUTO_INCREMENT,
+  escola_id               INT            NOT NULL,
+  pre_aluno_id            INT            NOT NULL,
+  tipo_codigo             VARCHAR(50)    NOT NULL,
+  nome_exibicao           VARCHAR(120)   NOT NULL,
+  nome_arquivo_original   VARCHAR(255)   NOT NULL,
+  caminho_relativo        VARCHAR(500)   NOT NULL,
+  content_type            VARCHAR(100)   DEFAULT NULL,
+  tamanho_bytes           BIGINT         NOT NULL,
+  enviado_por_usuario_id  INT            NOT NULL,
+  data_upload             DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_pad_pre_tipo (pre_aluno_id, tipo_codigo),
+  KEY idx_pad_escola_pre    (escola_id, pre_aluno_id),
+  CONSTRAINT fk_pad_escola  FOREIGN KEY (escola_id)               REFERENCES escolas     (id),
+  CONSTRAINT fk_pad_pre     FOREIGN KEY (pre_aluno_id)            REFERENCES pre_alunos  (id) ON DELETE CASCADE,
+  CONSTRAINT fk_pad_usuario FOREIGN KEY (enviado_por_usuario_id)  REFERENCES usuarios    (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
@@ -1120,9 +1178,7 @@ INSERT INTO permissoes (nome, descricao) VALUES
 ('EXPORTAR_FINANCEIRO',             'Exportar dados financeiros');
 
 -- ============================================================
--- DADOS OBRIGATÓRIOS — TEMPLATES DE PERFIL
--- Moldes usados ao criar uma nova escola pelo backend.
--- Espelha PermissoesPadraoPorPerfil em EscolasService.cs.
+-- DADOS OBRIGATORIOS - TEMPLATES DE PERFIL
 -- ============================================================
 
 INSERT INTO perfis_template (nome) VALUES
@@ -1133,26 +1189,15 @@ INSERT INTO perfis_template (nome) VALUES
   ('Financeiro'),
   ('Coordenador');
 
--- Vínculos: perfis_template × permissoes
+-- ============================================================
+-- VINCULOS: perfis_template x permissoes
+-- ============================================================
+
 -- Administrador
 INSERT INTO perfil_permissoes_template (perfil_template_id, permissao_id)
 SELECT pt.id, p.id
 FROM perfis_template pt
-JOIN permissoes p ON p.nome IN (
-  'CRIAR_USUARIO','VISUALIZAR_USUARIO','EDITAR_USUARIO','INATIVAR_USUARIO',
-  'GERENCIAR_PERMISSOES_USUARIO','GERENCIAR_CONFIGURACOES_SISTEMA',
-  'VISUALIZAR_TURMA','CRIAR_TURMA','EDITAR_TURMA','AGENDAR_TURMA','EDITAR_DIAS_TURMA',
-  'CONCLUIR_TURMA','INATIVAR_TURMA','CANCELAR_TURMA',
-  'VINCULAR_ALUNO_TURMA','DESVINCULAR_ALUNO_TURMA','REMANEJAR_ALUNO',
-  'VISUALIZAR_AULA',
-  'VISUALIZAR_MATRICULA','CRIAR_MATRICULA','EDITAR_MATRICULA','CANCELAR_MATRICULA',
-  'VISUALIZAR_PRE_ALUNO','VISUALIZAR_PARCELA',
-  'VISUALIZAR_ALUNO','VISUALIZAR_REPOSICAO',
-  'VISUALIZAR_LIVRO','CRIAR_LIVRO','EDITAR_LIVRO','INATIVAR_LIVRO',
-  'VISUALIZAR_CALENDARIO','GERENCIAR_CALENDARIO','EDITAR_EVENTO_CALENDARIO','EXCLUIR_EVENTO_CALENDARIO',
-  'VISUALIZAR_DASHBOARD_GERAL','VISUALIZAR_AGENDA_GLOBAL',
-  'CRIAR_COMPROMISSO','VISUALIZAR_COMPROMISSOS','EDITAR_COMPROMISSO','EXCLUIR_COMPROMISSO'
-)
+JOIN permissoes p ON p.nome NOT IN ('GERENCIAR_ESCOLAS','VISUALIZAR_ESCOLAS')
 WHERE pt.nome = 'Administrador';
 
 -- Professor
@@ -1160,7 +1205,20 @@ INSERT INTO perfil_permissoes_template (perfil_template_id, permissao_id)
 SELECT pt.id, p.id
 FROM perfis_template pt
 JOIN permissoes p ON p.nome IN (
-  'VISUALIZAR_AULA','VISUALIZAR_TURMA'
+  'VISUALIZAR_DASHBOARD_GERAL','VISUALIZAR_DASHBOARD_ACADEMICO',
+  'VISUALIZAR_TURMA','VISUALIZAR_AULA','VISUALIZAR_AGENDA_GLOBAL',
+  'REALIZAR_CHAMADA','VISUALIZAR_PRESENCA','EDITAR_PRESENCA',
+  'REGISTRAR_CONTEUDO_AULA','REALIZAR_AULA',
+  'LANCAR_HOMEWORK','VISUALIZAR_HOMEWORK','EDITAR_HOMEWORK',
+  'LANCAR_AVALIACAO','VISUALIZAR_AVALIACAO','EDITAR_AVALIACAO',
+  'CRIAR_OCORRENCIA_ACADEMICA','VISUALIZAR_OCORRENCIA',
+  'VISUALIZAR_REPOSICAO','CRIAR_REPOSICAO','EDITAR_REPOSICAO','REALIZAR_REPOSICAO','CANCELAR_REPOSICAO',
+  'VISUALIZAR_ALUNO','VISUALIZAR_HISTORICO_ALUNO',
+  'VISUALIZAR_LIVRO','VISUALIZAR_CAPITULO','VISUALIZAR_PROGRESSO_CAPITULO','MARCAR_CAPITULO_CONCLUIDO',
+  'VISUALIZAR_ARQUIVO_TURMA',
+  'VISUALIZAR_CALENDARIO',
+  'CRIAR_COMPROMISSO','VISUALIZAR_COMPROMISSOS','EDITAR_COMPROMISSO','EXCLUIR_COMPROMISSO',
+  'CONFIRMAR_COMPROMISSO','RECUSAR_COMPROMISSO'
 )
 WHERE pt.nome = 'Professor';
 
@@ -1169,7 +1227,13 @@ INSERT INTO perfil_permissoes_template (perfil_template_id, permissao_id)
 SELECT pt.id, p.id
 FROM perfis_template pt
 JOIN permissoes p ON p.nome IN (
-  'VISUALIZAR_PRE_ALUNO','CRIAR_PRE_ALUNO','VISUALIZAR_COMPROMISSOS','CRIAR_COMPROMISSO'
+  'VISUALIZAR_DASHBOARD_GERAL',
+  'VISUALIZAR_PRE_ALUNO','CRIAR_PRE_ALUNO','EDITAR_PRE_ALUNO','CANCELAR_PRE_ALUNO',
+  'VISUALIZAR_CONTRATO','GERAR_CONTRATO',
+  'VISUALIZAR_TEMPLATE_CONTRATO',
+  'VISUALIZAR_RESPONSAVEL',
+  'CRIAR_COMPROMISSO','VISUALIZAR_COMPROMISSOS','EDITAR_COMPROMISSO','EXCLUIR_COMPROMISSO',
+  'CONFIRMAR_COMPROMISSO','RECUSAR_COMPROMISSO'
 )
 WHERE pt.nome = 'Comercial';
 
@@ -1178,8 +1242,21 @@ INSERT INTO perfil_permissoes_template (perfil_template_id, permissao_id)
 SELECT pt.id, p.id
 FROM perfis_template pt
 JOIN permissoes p ON p.nome IN (
-  'VISUALIZAR_MATRICULA','CRIAR_MATRICULA','VISUALIZAR_ALUNO',
-  'CRIAR_COMPROMISSO','VISUALIZAR_COMPROMISSOS','EDITAR_COMPROMISSO','EXCLUIR_COMPROMISSO'
+  'VISUALIZAR_DASHBOARD_GERAL',
+  'VISUALIZAR_PRE_ALUNO',
+  'VISUALIZAR_MATRICULA','CRIAR_MATRICULA','EDITAR_MATRICULA','CANCELAR_MATRICULA',
+  'APROVAR_MATRICULA','REPROVAR_MATRICULA','FINALIZAR_MATRICULA',
+  'DEVOLVER_MATRICULA_COMERCIAL','REMOVER_ANEXO_MATRICULA',
+  'VISUALIZAR_ALUNO','CRIAR_ALUNO','EDITAR_ALUNO','INATIVAR_ALUNO','TRANCAR_ALUNO',
+  'VISUALIZAR_HISTORICO_ALUNO','ANEXAR_DOCUMENTO_ALUNO','JUSTIFICAR_FALTA_ALUNO',
+  'VISUALIZAR_RESPONSAVEL','CRIAR_RESPONSAVEL','EDITAR_RESPONSAVEL',
+  'CRIAR_FILIACAO','EDITAR_FILIACAO',
+  'VISUALIZAR_TURMA','VINCULAR_ALUNO_TURMA','DESVINCULAR_ALUNO_TURMA',
+  'VISUALIZAR_RELATORIO_ALUNOS',
+  'VISUALIZAR_CALENDARIO',
+  'CRIAR_COMPROMISSO','VISUALIZAR_COMPROMISSOS','EDITAR_COMPROMISSO','EXCLUIR_COMPROMISSO',
+  'CONFIRMAR_COMPROMISSO','RECUSAR_COMPROMISSO',
+  'ADICIONAR_PARTICIPANTE_COMPROMISSO'
 )
 WHERE pt.nome = 'Secretaria';
 
@@ -1188,7 +1265,20 @@ INSERT INTO perfil_permissoes_template (perfil_template_id, permissao_id)
 SELECT pt.id, p.id
 FROM perfis_template pt
 JOIN permissoes p ON p.nome IN (
-  'VISUALIZAR_PARCELA','VISUALIZAR_MOVIMENTACAO_FINANCEIRA','VISUALIZAR_COMPROMISSOS'
+  'VISUALIZAR_DASHBOARD_GERAL','VISUALIZAR_DASHBOARD_FINANCEIRO',
+  'VISUALIZAR_ALUNO','VISUALIZAR_RESPONSAVEL',
+  'VISUALIZAR_MATRICULA',
+  'VISUALIZAR_PARCELA','CRIAR_PARCELA','EDITAR_PARCELA',
+  'BAIXA_PARCELA','ESTORNAR_PARCELA','INATIVAR_PARCELA',
+  'GERAR_CARNE_ESCOLAR','GERAR_RECIBO','VISUALIZAR_HISTORICO_PARCELA',
+  'VISUALIZAR_MOVIMENTACAO_FINANCEIRA',
+  'VISUALIZAR_CONTA_BANCARIA','CRIAR_CONTA_BANCARIA','EDITAR_CONTA_BANCARIA','INATIVAR_CONTA_BANCARIA',
+  'VISUALIZAR_CATEGORIA_FINANCEIRA','CRIAR_CATEGORIA_FINANCEIRA',
+  'EDITAR_CATEGORIA_FINANCEIRA','INATIVAR_CATEGORIA_FINANCEIRA',
+  'VISUALIZAR_RELATORIO_FINANCEIRO','VISUALIZAR_RELATORIO_INADIMPLENCIA','VISUALIZAR_RELATORIO_RECEITAS',
+  'EXPORTAR_FINANCEIRO','IMPORTAR_FINANCEIRO',
+  'CRIAR_COMPROMISSO','VISUALIZAR_COMPROMISSOS','EDITAR_COMPROMISSO','EXCLUIR_COMPROMISSO',
+  'CONFIRMAR_COMPROMISSO','RECUSAR_COMPROMISSO'
 )
 WHERE pt.nome = 'Financeiro';
 
@@ -1197,43 +1287,53 @@ INSERT INTO perfil_permissoes_template (perfil_template_id, permissao_id)
 SELECT pt.id, p.id
 FROM perfis_template pt
 JOIN permissoes p ON p.nome IN (
+  'VISUALIZAR_DASHBOARD_GERAL','VISUALIZAR_DASHBOARD_ACADEMICO',
   'VISUALIZAR_TURMA','CRIAR_TURMA','EDITAR_TURMA','AGENDAR_TURMA','EDITAR_DIAS_TURMA',
   'CONCLUIR_TURMA','INATIVAR_TURMA','CANCELAR_TURMA',
   'VINCULAR_ALUNO_TURMA','DESVINCULAR_ALUNO_TURMA','REMANEJAR_ALUNO',
-  'VISUALIZAR_AULA','VISUALIZAR_REPOSICAO',
-  'VISUALIZAR_DASHBOARD_GERAL',
+  'VISUALIZAR_AULA','CRIAR_AULA','EDITAR_AULA','CANCELAR_AULA','REALIZAR_AULA',
+  'REGISTRAR_CONTEUDO_AULA','VISUALIZAR_AGENDA_GLOBAL',
+  'REALIZAR_CHAMADA','VISUALIZAR_PRESENCA','EDITAR_PRESENCA','JUSTIFICAR_FALTA_ALUNO',
+  'LANCAR_HOMEWORK','VISUALIZAR_HOMEWORK','EDITAR_HOMEWORK',
+  'LANCAR_AVALIACAO','VISUALIZAR_AVALIACAO','EDITAR_AVALIACAO',
+  'CRIAR_OCORRENCIA_ACADEMICA','CRIAR_OCORRENCIA_ADMINISTRATIVA','VISUALIZAR_OCORRENCIA','EDITAR_OCORRENCIA',
+  'VISUALIZAR_REPOSICAO','CRIAR_REPOSICAO','EDITAR_REPOSICAO','REALIZAR_REPOSICAO','CANCELAR_REPOSICAO',
+  'VISUALIZAR_ALUNO','VISUALIZAR_HISTORICO_ALUNO',
   'VISUALIZAR_LIVRO','CRIAR_LIVRO','EDITAR_LIVRO','INATIVAR_LIVRO',
-  'CRIAR_COMPROMISSO','VISUALIZAR_COMPROMISSOS','EDITAR_COMPROMISSO','EXCLUIR_COMPROMISSO'
+  'VISUALIZAR_CAPITULO','CRIAR_CAPITULO','EDITAR_CAPITULO','INATIVAR_CAPITULO',
+  'VISUALIZAR_PROGRESSO_CAPITULO','MARCAR_CAPITULO_CONCLUIDO',
+  'VISUALIZAR_ARQUIVO_TURMA','CRIAR_PASTA_ARQUIVO_TURMA','EDITAR_PASTA_ARQUIVO_TURMA',
+  'INATIVAR_PASTA_ARQUIVO_TURMA','UPLOAD_ARQUIVO_TURMA','EDITAR_ARQUIVO_TURMA','INATIVAR_ARQUIVO_TURMA',
+  'VISUALIZAR_CALENDARIO','GERENCIAR_CALENDARIO','EDITAR_EVENTO_CALENDARIO','EXCLUIR_EVENTO_CALENDARIO',
+  'VISUALIZAR_RELATORIO_FREQUENCIA','VISUALIZAR_RELATORIO_NOTAS',
+  'VISUALIZAR_RELATORIO_TURMAS','VISUALIZAR_RELATORIO_ALUNOS',
+  'EXPORTAR_ALUNOS',
+  'CRIAR_COMPROMISSO','VISUALIZAR_COMPROMISSOS','EDITAR_COMPROMISSO','EXCLUIR_COMPROMISSO',
+  'VISUALIZAR_COMPROMISSOS_OUTROS','ADICIONAR_PARTICIPANTE_COMPROMISSO',
+  'CONFIRMAR_COMPROMISSO','RECUSAR_COMPROMISSO'
 )
 WHERE pt.nome = 'Coordenador';
 
 -- ============================================================
--- DADOS OBRIGATÓRIOS — ESCOLA SYSTEM + SUPERADMIN
+-- DADOS OBRIGATORIOS - ESCOLA SYSTEM + SUPERADMIN
 -- ============================================================
 
--- Escola reservada para o acesso global (não é um tenant real)
 INSERT INTO escolas (codigo_escola, nome_fantasia, razao_social, status)
 VALUES ('SYSTEM', 'Learly - Administracao Global', 'Learly Sistema', 'Ativo');
 
--- Perfil do superadmin dentro da escola SYSTEM
 INSERT INTO perfis (escola_id, nome, descricao, status)
 SELECT id, 'Super Admin', 'Acesso global do sistema', 'Ativo'
 FROM escolas
 WHERE codigo_escola = 'SYSTEM';
 
--- Permissões globais do superadmin
 INSERT INTO perfil_permissoes (perfil_id, permissao_id)
 SELECT p.id, perm.id
 FROM perfis p
 JOIN escolas e ON e.id = p.escola_id AND e.codigo_escola = 'SYSTEM'
-JOIN permissoes perm ON perm.nome IN ('GERENCIAR_ESCOLAS', 'VISUALIZAR_ESCOLAS')
+JOIN permissoes perm ON perm.nome IN ('GERENCIAR_ESCOLAS','VISUALIZAR_ESCOLAS')
 WHERE p.nome = 'Super Admin';
 
--- Usuário de bootstrap
--- Login : admin  (sem código de escola no campo de login)
--- Senha : admin
--- O backend detecta que não é hash BCrypt e aceita texto puro em ambiente de
--- desenvolvimento, migrando automaticamente para BCrypt no primeiro login.
+-- Usuario bootstrap
 INSERT INTO usuarios (escola_id, nome_completo, email, senha, perfil_id, status)
 SELECT
   e.id,
@@ -1247,15 +1347,22 @@ JOIN perfis p ON p.escola_id = e.id AND p.nome = 'Super Admin'
 WHERE e.codigo_escola = 'SYSTEM';
 
 -- ============================================================
+-- MIGRACOES EF
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory` (
+  `MigrationId` varchar(150) CHARACTER SET utf8mb4 NOT NULL,
+  `ProductVersion` varchar(32) CHARACTER SET utf8mb4 NOT NULL,
+  CONSTRAINT `PK___EFMigrationsHistory` PRIMARY KEY (`MigrationId`)
+) CHARACTER SET=utf8mb4;
+
+INSERT IGNORE INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`) VALUES
+  ('20260422234757_InitialCleanArchitecture',              '10.0.0'),
+  ('20260424012952_PerfisPermissoesTemplate',              '10.0.0'),
+  ('20260504121858_MatriculasTurmaOpcionalStatusEmEspera', '10.0.0'),
+  ('20260514000000_ContratosModule',                       '10.0.0'),
+  ('20260516120000_ContratosAlignColumns',                 '10.0.0'),
+  ('20260521120000_PreAlunoDocumentosModule',              '10.0.0'),
+  ('20260521140000_PreResponsaveisModule',                 '10.0.0');
+
 -- FIM DO SETUP
--- ============================================================
--- Credencial de acesso:
---   E-mail : admin
---   Senha  : admin
---   (deixe o campo "código da escola" em branco no login)
---
--- Próximos passos:
---   1. Acesse o painel super-admin e crie a primeira escola
---   2. O backend gera automaticamente os perfis e permissões
---      padrão para o tenant usando os perfis_template acima
--- ============================================================

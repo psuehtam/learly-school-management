@@ -265,6 +265,14 @@ function ModalTemplate({ open, onClose, template, variaveis, onSaved }: ModalTem
 
 // ─────────────────── Modal Gerar Contrato ───────────────────
 
+function serializarGerarContratoEstado(p: {
+  busca: string;
+  preAlunoId: number | "";
+  templateId: number | "";
+}) {
+  return JSON.stringify(p);
+}
+
 interface ModalGerarProps {
   open: boolean;
   onClose: () => void;
@@ -280,17 +288,33 @@ function ModalGerarContrato({ open, onClose, templates, preAlunos, preAlunoIdIni
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState("");
   const [resultado, setResultado] = useState<ContratoGeradoData | null>(null);
+  const [baseline, setBaseline] = useState("");
 
   const templateAtivo = templates.find((t) => t.ativo);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setBaseline("");
+      return;
+    }
+    const templateInicial = templateAtivo?.id ?? "";
     setBusca("");
     setPreAlunoId(preAlunoIdInicial ?? "");
-    setTemplateId(templateAtivo?.id ?? "");
+    setTemplateId(templateInicial);
     setErro("");
     setResultado(null);
+    setBaseline(
+      serializarGerarContratoEstado({
+        busca: "",
+        preAlunoId: preAlunoIdInicial ?? "",
+        templateId: templateInicial,
+      }),
+    );
   }, [open, preAlunoIdInicial, templateAtivo]);
+
+  const estadoAtual = serializarGerarContratoEstado({ busca, preAlunoId, templateId });
+  const temAlteracao =
+    open && !gerando && baseline !== "" && estadoAtual !== baseline;
 
   const preAlunosFiltrados = preAlunos.filter((p) => {
     const q = busca.toLowerCase();
@@ -352,15 +376,17 @@ function ModalGerarContrato({ open, onClose, templates, preAlunos, preAlunoIdIni
         onClose={onClose}
         title="Contrato gerado"
         className="max-w-4xl"
-        footer={
+        hasUnsavedChanges
+        confirmDiscardMessage="Deseja fechar? O contrato já foi gerado — imprima ou salve em PDF antes de sair, se precisar."
+        footer={(rc) => (
           <>
-            <Button variant="secondary" onClick={onClose}>Fechar</Button>
+            <Button variant="secondary" onClick={rc}>Fechar</Button>
             <Button onClick={handleImprimir}>
               <svg className="mr-1.5 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               Imprimir / PDF
             </Button>
           </>
-        }
+        )}
       >
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm text-zinc-500">
@@ -383,6 +409,8 @@ function ModalGerarContrato({ open, onClose, templates, preAlunos, preAlunoIdIni
       open={open}
       onClose={onClose}
       title="Gerar contrato"
+      hasUnsavedChanges={temAlteracao}
+      closeDisabled={gerando}
       footer={(rc) => (
         <>
           <Button variant="secondary" onClick={rc} disabled={gerando}>Cancelar</Button>

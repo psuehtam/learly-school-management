@@ -25,6 +25,11 @@ public interface IAlunoRepository : IRepository<Aluno, int>
         int escolaId,
         CancellationToken cancellationToken = default);
 
+    Task<ResponsavelDadosItem?> ObterResponsavelDadosAsync(
+        int responsavelId,
+        int escolaId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> ExisteCpfNaEscolaAsync(int escolaId, string cpf, CancellationToken cancellationToken = default);
     Task<bool> ExisteResponsavelNaEscolaAsync(int escolaId, int responsavelId, CancellationToken cancellationToken = default);
     Task<int?> ObterResponsavelIdPorCpfAsync(int escolaId, string cpfCnpj, CancellationToken cancellationToken = default);
@@ -60,5 +65,22 @@ public interface IAlunoRepository : IRepository<Aluno, int>
         string tipo,
         string numero,
         bool principal,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Atualiza colunas opcionais do responsável (apenas campos informados).</summary>
+    Task AtualizarResponsavelOpcionaisAsync(
+        int escolaId,
+        int responsavelId,
+        string? sexo,
+        string? grauParentesco,
+        string? estadoCivil,
+        string? corRaca,
+        string? nacionalidade,
+        DateOnly? dataNascimento,
+        string? naturalidadeCidade,
+        string? naturalidadeEstado,
+        string? rgNumero,
+        DateOnly? rgExpedicao,
+        string? rgOrgao,
         CancellationToken cancellationToken = default);
 }

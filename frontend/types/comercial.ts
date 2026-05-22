@@ -42,6 +42,53 @@ export interface PreAlunoListItem {
 
   valorMatricula: number;
 
+  observacoesComerciais: string | null;
+
+}
+
+/** Detalhe de `/api/pre-alunos/{id}` para edição no comercial. */
+export interface PreAlunoDetalhe {
+  id: number;
+  responsavelTipoPessoa: string;
+  responsavelCpfCnpj: string;
+  responsavelNome: string;
+  responsavelSobrenome: string;
+  responsavelTelefone: string | null;
+  responsavelSexo: string | null;
+  responsavelGrauParentesco: string | null;
+  responsavelEstadoCivil: string | null;
+  responsavelCorRaca: string | null;
+  responsavelNacionalidade: string | null;
+  responsavelDataNascimento: string | null;
+  responsavelNaturalidadeCidade: string | null;
+  responsavelNaturalidadeEstado: string | null;
+  responsavelRgNumero: string | null;
+  responsavelRgExpedicao: string | null;
+  responsavelRgOrgao: string | null;
+  nomeAluno: string;
+  sobrenomeAluno: string;
+  dataNascimentoAluno: string;
+  telefoneAluno: string | null;
+  livroInteresseId: number;
+  tipoContrato: string;
+  valorMensalidade: number;
+  formaPagamento: string | null;
+  valorMatricula: number;
+  formaPagamentoMatricula: string | null;
+  valorMaterial: number | null;
+  origemCaptacao: string;
+  usaTransporteVan: boolean;
+  transporteCep: string | null;
+  transporteLogradouro: string | null;
+  transporteNumero: string | null;
+  transporteComplemento: string | null;
+  transporteBairro: string | null;
+  transporteCidade: string | null;
+  transporteUf: string | null;
+  observacoesComerciais: string | null;
+  eProprioResponsavel: boolean;
+  alunoCpf: string | null;
+  status: PreAlunoStatus;
 }
 
 
@@ -77,6 +124,18 @@ export interface CriarPreAlunoPayload {
   responsavelSobrenome: string;
 
   responsavelTelefone: string;
+
+  responsavelSexo?: string | null;
+  responsavelGrauParentesco?: string | null;
+  responsavelEstadoCivil?: string | null;
+  responsavelCorRaca?: string | null;
+  responsavelNacionalidade?: string | null;
+  responsavelDataNascimento?: string | null;
+  responsavelNaturalidadeCidade?: string | null;
+  responsavelNaturalidadeEstado?: string | null;
+  responsavelRgNumero?: string | null;
+  responsavelRgExpedicao?: string | null;
+  responsavelRgOrgao?: string | null;
 
   nome: string;
 

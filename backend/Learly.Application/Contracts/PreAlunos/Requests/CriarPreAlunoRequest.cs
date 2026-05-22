@@ -14,6 +14,18 @@ public sealed class CriarPreAlunoRequest
     public string ResponsavelSobrenome { get; init; } = string.Empty;
     public string ResponsavelTelefone { get; init; } = string.Empty;
 
+    public string? ResponsavelSexo { get; init; }
+    public string? ResponsavelGrauParentesco { get; init; }
+    public string? ResponsavelEstadoCivil { get; init; }
+    public string? ResponsavelCorRaca { get; init; }
+    public string? ResponsavelNacionalidade { get; init; }
+    public string? ResponsavelDataNascimento { get; init; }
+    public string? ResponsavelNaturalidadeCidade { get; init; }
+    public string? ResponsavelNaturalidadeEstado { get; init; }
+    public string? ResponsavelRgNumero { get; init; }
+    public string? ResponsavelRgExpedicao { get; init; }
+    public string? ResponsavelRgOrgao { get; init; }
+
     public string Nome { get; init; } = string.Empty;
     public string Sobrenome { get; init; } = string.Empty;
     public DateOnly DataNascimento { get; init; }

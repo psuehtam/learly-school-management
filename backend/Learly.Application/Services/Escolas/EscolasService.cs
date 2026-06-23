@@ -3,8 +3,10 @@ using Learly.Application.Contracts.Escolas.Requests;
 using Learly.Application.Contracts.Escolas.Responses;
 using Learly.Application.Services.Common;
 using Learly.Domain.Entities;
+using Learly.Domain.Exceptions;
 using Learly.Domain.Interfaces.Persistence;
 using Learly.Domain.Interfaces.Repositories;
+using Learly.Domain.Interfaces.Services;
 using MapsterMapper;
 
 namespace Learly.Application.Services.Escolas;
@@ -14,6 +16,11 @@ public sealed class EscolasService : IEscolasService
     private const string AdminPerfilNome = "Administrador";
     private const string PermissaoExcluirDasPadroesAdmin = "GERENCIAR_ESCOLAS";
     private static readonly string[] PerfisPadrao = ["Administrador", "Professor", "Comercial", "Secretaria", "Financeiro", "Coordenador"];
+    private static readonly HashSet<string> ExtensoesLogoPermitidas = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".webp"
+    };
+    private const long TamanhoMaximoLogoBytes = 2 * 1024 * 1024;
 
     private readonly IEscolaRepository _escolas;
     private readonly IUsuarioRepository _usuarios;
@@ -21,6 +28,7 @@ public sealed class EscolasService : IEscolasService
     private readonly IPermissaoRepository _permissoes;
     private readonly IPerfilPermissaoRepository _perfilPermissoes;
     private readonly ITemplatePermissoesRepository _templatePermissoes;
+    private readonly IArquivoStorageService _arquivoStorage;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
@@ -31,6 +39,7 @@ public sealed class EscolasService : IEscolasService
         IPermissaoRepository permissoes,
         IPerfilPermissaoRepository perfilPermissoes,
         ITemplatePermissoesRepository templatePermissoes,
+        IArquivoStorageService arquivoStorage,
         IUnitOfWork unitOfWork,
         IMapper mapper)
     {
@@ -40,6 +49,7 @@ public sealed class EscolasService : IEscolasService
         _permissoes = permissoes;
         _perfilPermissoes = perfilPermissoes;
         _templatePermissoes = templatePermissoes;
+        _arquivoStorage = arquivoStorage;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
     }
@@ -110,6 +120,223 @@ public sealed class EscolasService : IEscolasService
 
         var dto = _mapper.Map<EscolaListItemResponse>(entidade);
         return new EscolaCriacaoResultado(true, dto, null, EscolaCriacaoFalha.Nenhuma);
+    }
+
+    public async Task<MinhaEscolaConsultaResultado> ObterMinhaEscolaAsync(
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
+    {
+        var escola = await ObterEscolaRastreadaDoUsuarioAsync(uc, cancellationToken);
+        if (escola is null)
+        {
+            return new MinhaEscolaConsultaResultado(false, null, "Acesso negado.", MinhaEscolaFalha.AcessoNegado);
+        }
+
+        return new MinhaEscolaConsultaResultado(true, MapearMinhaEscola(escola), null, MinhaEscolaFalha.Nenhuma);
+    }
+
+    public async Task<MinhaEscolaAtualizacaoResultado> AtualizarMinhaEscolaAsync(
+        AtualizarMinhaEscolaRequest request,
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
+    {
+        var escola = await ObterEscolaRastreadaDoUsuarioAsync(uc, cancellationToken);
+        if (escola is null)
+        {
+            return new MinhaEscolaAtualizacaoResultado(false, null, "Acesso negado.", MinhaEscolaFalha.AcessoNegado);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NomeFantasia))
+        {
+            return new MinhaEscolaAtualizacaoResultado(false, null, "Nome fantasia e obrigatorio.", MinhaEscolaFalha.Validacao);
+        }
+
+        try
+        {
+            escola.AlterarDadosCadastrais(
+                request.NomeFantasia.Trim(),
+                request.RazaoSocial,
+                request.Cnpj);
+            escola.AlterarEndereco(
+                request.Cep,
+                request.Logradouro,
+                request.Numero,
+                request.Complemento,
+                request.Bairro,
+                request.Cidade,
+                request.Uf);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DomainException ex)
+        {
+            return new MinhaEscolaAtualizacaoResultado(false, null, ex.Message, MinhaEscolaFalha.Validacao);
+        }
+
+        return new MinhaEscolaAtualizacaoResultado(true, MapearMinhaEscola(escola), null, MinhaEscolaFalha.Nenhuma);
+    }
+
+    public async Task<EscolaConfiguracoesConsultaResultado> ObterConfiguracoesAsync(
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
+    {
+        var escolaId = await ObterEscolaIdDoUsuarioAsync(uc, cancellationToken);
+        if (!escolaId.HasValue)
+        {
+            return new EscolaConfiguracoesConsultaResultado(false, null, "Acesso negado.", MinhaEscolaFalha.AcessoNegado);
+        }
+
+        var escola = await _escolas.ObterPorIdAsync(escolaId.Value, cancellationToken);
+        if (escola is null)
+        {
+            return new EscolaConfiguracoesConsultaResultado(false, null, "Escola nao encontrada.", MinhaEscolaFalha.NaoEncontrado);
+        }
+
+        return new EscolaConfiguracoesConsultaResultado(
+            true,
+            MapearConfiguracoes(escola),
+            null,
+            MinhaEscolaFalha.Nenhuma);
+    }
+
+    public async Task<EscolaConfiguracoesAtualizacaoResultado> AtualizarConfiguracoesAsync(
+        AtualizarEscolaConfiguracoesRequest request,
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
+    {
+        var escola = await ObterEscolaRastreadaDoUsuarioAsync(uc, cancellationToken);
+        if (escola is null)
+        {
+            return new EscolaConfiguracoesAtualizacaoResultado(false, null, "Acesso negado.", MinhaEscolaFalha.AcessoNegado);
+        }
+
+        try
+        {
+            escola.AlterarConfiguracoesTurma(request.MinAlunosTurma, request.MaxAlunosTurma);
+            escola.AlterarConfiguracoesAula(request.MetricaAula, request.DuracaoAulaMinutos);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DomainException ex)
+        {
+            return new EscolaConfiguracoesAtualizacaoResultado(false, null, ex.Message, MinhaEscolaFalha.Validacao);
+        }
+
+        return new EscolaConfiguracoesAtualizacaoResultado(
+            true,
+            MapearConfiguracoes(escola),
+            null,
+            MinhaEscolaFalha.Nenhuma);
+    }
+
+    public async Task<EscolaLogoUploadResultado> EnviarLogoAsync(
+        Stream conteudo,
+        string nomeArquivo,
+        string contentType,
+        long tamanhoBytes,
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
+    {
+        var escola = await ObterEscolaRastreadaDoUsuarioAsync(uc, cancellationToken);
+        if (escola is null)
+        {
+            return new EscolaLogoUploadResultado(false, "Acesso negado.", MinhaEscolaFalha.AcessoNegado);
+        }
+
+        if (tamanhoBytes <= 0 || tamanhoBytes > TamanhoMaximoLogoBytes)
+        {
+            return new EscolaLogoUploadResultado(false, "Logo deve ter entre 1 byte e 2 MB.", MinhaEscolaFalha.Validacao);
+        }
+
+        var ext = Path.GetExtension(nomeArquivo);
+        if (string.IsNullOrWhiteSpace(ext) || !ExtensoesLogoPermitidas.Contains(ext))
+        {
+            return new EscolaLogoUploadResultado(false, "Formato nao permitido. Use JPG, PNG ou WEBP.", MinhaEscolaFalha.Validacao);
+        }
+
+        var caminhoRelativo = $"escolas/{escola.Id}/logo{ext.ToLowerInvariant()}";
+        if (!string.IsNullOrWhiteSpace(escola.LogoCaminho))
+        {
+            await _arquivoStorage.RemoverAsync(escola.LogoCaminho, cancellationToken);
+        }
+
+        await _arquivoStorage.SalvarAsync(caminhoRelativo, conteudo, cancellationToken);
+        escola.DefinirLogo(caminhoRelativo);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new EscolaLogoUploadResultado(true, null, MinhaEscolaFalha.Nenhuma);
+    }
+
+    public async Task<EscolaLogoArquivoResultado> ObterLogoAsync(
+        AppUserContext uc,
+        CancellationToken cancellationToken = default)
+    {
+        var escolaId = await ObterEscolaIdDoUsuarioAsync(uc, cancellationToken);
+        if (!escolaId.HasValue)
+        {
+            return new EscolaLogoArquivoResultado(false, null, null, "Acesso negado.", MinhaEscolaFalha.AcessoNegado);
+        }
+
+        var escola = await _escolas.ObterPorIdAsync(escolaId.Value, cancellationToken);
+        if (escola is null || string.IsNullOrWhiteSpace(escola.LogoCaminho))
+        {
+            return new EscolaLogoArquivoResultado(false, null, null, "Logo nao encontrada.", MinhaEscolaFalha.NaoEncontrado);
+        }
+
+        var stream = await _arquivoStorage.AbrirLeituraAsync(escola.LogoCaminho, cancellationToken);
+        if (stream is null)
+        {
+            return new EscolaLogoArquivoResultado(false, null, null, "Logo nao encontrada.", MinhaEscolaFalha.NaoEncontrado);
+        }
+
+        var contentType = ResolverContentTypeLogo(escola.LogoCaminho);
+        return new EscolaLogoArquivoResultado(true, stream, contentType, null, MinhaEscolaFalha.Nenhuma);
+    }
+
+    private async Task<int?> ObterEscolaIdDoUsuarioAsync(AppUserContext uc, CancellationToken ct)
+    {
+        if (uc.IsSuperAdmin || string.IsNullOrWhiteSpace(uc.CodigoEscola))
+            return null;
+
+        return await _escolas.ObterIdAtivaPorCodigoEscolaAsync(uc.CodigoEscola, ct);
+    }
+
+    private async Task<Escola?> ObterEscolaRastreadaDoUsuarioAsync(AppUserContext uc, CancellationToken ct)
+    {
+        var escolaId = await ObterEscolaIdDoUsuarioAsync(uc, ct);
+        if (!escolaId.HasValue)
+            return null;
+
+        return await _escolas.ObterRastreadaPorIdAsync(escolaId.Value, ct);
+    }
+
+    private static MinhaEscolaResponse MapearMinhaEscola(Escola escola) =>
+        new(
+            escola.Id,
+            escola.CodigoEscola,
+            escola.NomeFantasia,
+            escola.RazaoSocial,
+            escola.Cnpj,
+            escola.Cep,
+            escola.Logradouro,
+            escola.Numero,
+            escola.Complemento,
+            escola.Bairro,
+            escola.Cidade,
+            escola.Uf,
+            !string.IsNullOrWhiteSpace(escola.LogoCaminho));
+
+    private static EscolaConfiguracoesResponse MapearConfiguracoes(Escola escola) =>
+        new(escola.MinAlunosTurma, escola.MaxAlunosTurma, escola.MetricaAula, escola.DuracaoAulaMinutos);
+
+    private static string ResolverContentTypeLogo(string caminho)
+    {
+        var ext = Path.GetExtension(caminho).ToLowerInvariant();
+        return ext switch
+        {
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            _ => "application/octet-stream"
+        };
     }
 
     private async Task<Escola> CriarEscolaEUsuarioAdminAsync(

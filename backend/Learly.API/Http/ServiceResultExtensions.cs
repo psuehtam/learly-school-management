@@ -674,4 +674,170 @@ public static class ServiceResultExtensions
             })
         };
     }
+
+    public static IActionResult ToActionResult(this MinhaEscolaConsultaResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Escola is not null)
+            return c.Ok(r.Escola);
+
+        return r.Falha switch
+        {
+            MinhaEscolaFalha.AcessoNegado => c.Forbid(),
+            MinhaEscolaFalha.NaoEncontrado => c.NotFound(new ProblemDetails
+            {
+                Title = "Nao encontrado",
+                Detail = r.Mensagem ?? "Escola nao encontrada.",
+                Status = StatusCodes.Status404NotFound
+            }),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao obter escola.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this MinhaEscolaAtualizacaoResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Escola is not null)
+            return c.Ok(r.Escola);
+
+        return r.Falha switch
+        {
+            MinhaEscolaFalha.AcessoNegado => c.Forbid(),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao atualizar escola.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this EscolaConfiguracoesConsultaResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Configuracoes is not null)
+            return c.Ok(r.Configuracoes);
+
+        return r.Falha switch
+        {
+            MinhaEscolaFalha.AcessoNegado => c.Forbid(),
+            MinhaEscolaFalha.NaoEncontrado => c.NotFound(new ProblemDetails
+            {
+                Title = "Nao encontrado",
+                Detail = r.Mensagem ?? "Escola nao encontrada.",
+                Status = StatusCodes.Status404NotFound
+            }),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao obter configuracoes.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this EscolaConfiguracoesAtualizacaoResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Configuracoes is not null)
+            return c.Ok(r.Configuracoes);
+
+        return r.Falha switch
+        {
+            MinhaEscolaFalha.AcessoNegado => c.Forbid(),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao atualizar configuracoes.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this EscolaLogoUploadResultado r, ControllerBase c)
+    {
+        if (r.Ok)
+            return c.NoContent();
+
+        return r.Falha switch
+        {
+            MinhaEscolaFalha.AcessoNegado => c.Forbid(),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao enviar logo.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this EscolaLogoArquivoResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Conteudo is not null)
+            return c.File(r.Conteudo, r.ContentType ?? "application/octet-stream");
+
+        return r.Falha switch
+        {
+            MinhaEscolaFalha.AcessoNegado => c.Forbid(),
+            MinhaEscolaFalha.NaoEncontrado => c.NotFound(new ProblemDetails
+            {
+                Title = "Nao encontrado",
+                Detail = r.Mensagem ?? "Logo nao encontrada.",
+                Status = StatusCodes.Status404NotFound
+            }),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao obter logo.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this LivroPlanejamentoConsultaResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Planejamento is not null)
+            return c.Ok(r.Planejamento);
+
+        return r.Falha switch
+        {
+            LivrosEscolaFalha.AcessoNegado => c.Forbid(),
+            LivrosEscolaFalha.NaoEncontrado => c.NotFound(new ProblemDetails
+            {
+                Title = "Nao encontrado",
+                Detail = r.Mensagem ?? "Livro nao encontrado.",
+                Status = StatusCodes.Status404NotFound
+            }),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao obter planejamento.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
+
+    public static IActionResult ToActionResult(this LivroPlanejamentoSalvarResultado r, ControllerBase c)
+    {
+        if (r.Ok && r.Planejamento is not null)
+            return c.Ok(r.Planejamento);
+
+        return r.Falha switch
+        {
+            LivrosEscolaFalha.AcessoNegado => c.Forbid(),
+            LivrosEscolaFalha.NaoEncontrado => c.NotFound(new ProblemDetails
+            {
+                Title = "Nao encontrado",
+                Detail = r.Mensagem ?? "Livro nao encontrado.",
+                Status = StatusCodes.Status404NotFound
+            }),
+            _ => c.BadRequest(new ProblemDetails
+            {
+                Title = "Requisicao invalida",
+                Detail = r.Mensagem ?? "Falha ao salvar planejamento.",
+                Status = StatusCodes.Status400BadRequest
+            })
+        };
+    }
 }

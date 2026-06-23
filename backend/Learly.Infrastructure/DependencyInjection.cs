@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<IPreAlunoDocumentoRepository, PreAlunoDocumentoRepository>();
         services.AddScoped<IArquivoStorageService, LocalArquivoStorageService>();
         services.AddScoped<ILivroCatalogoRepository, LivroCatalogoRepository>();
+        services.AddScoped<ILivroPlanejamentoRepository, LivroPlanejamentoRepository>();
         services.AddScoped<IPerfilRepository, PerfilRepository>();
         services.AddScoped<IPermissaoRepository, PermissaoRepository>();
         services.AddScoped<IPerfilPermissaoRepository, PerfilPermissaoRepository>();

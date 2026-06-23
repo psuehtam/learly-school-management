@@ -2,42 +2,41 @@ using Learly.Domain.Entities;
 
 namespace Learly.Application.Services.Turmas;
 
-/// <summary>Gera datas de aula e distribui capítulos conforme documentação §6.3.4.</summary>
+/// <summary>Gera datas de aula e distribui dias de planejamento conforme documentação §6.3.4.</summary>
 internal static class TurmaAulaGerador
 {
     public sealed record AulaPlanejada(
-        int CapituloId,
+        int CapituloIdPrincipal,
         int NumeroAula,
-        DateOnly DataAula);
+        DateOnly DataAula,
+        int PlanejamentoDiaOrdem);
 
     public sealed record ResultadoGeracao(
         IReadOnlyList<AulaPlanejada> Aulas,
         DateOnly? DataTerminoPrevista);
 
-    public static ResultadoGeracao Gerar(
+    /// <summary>
+    /// Gera datas para N dias de planejamento (1 aula por dia), respeitando calendário.
+    /// </summary>
+    public static ResultadoGeracao GerarPorDiasPlanejamento(
         DateOnly dataInicio,
         IReadOnlyList<int> diasSemana,
-        IReadOnlyList<Capitulo> capitulosOrdenados,
+        IReadOnlyList<LivroPlanejamentoDia> diasPlanejamento,
         Func<DateOnly, bool> diaSuspendeAula,
         int maxDiasVarredura = 365 * 3)
     {
-        var slotsNecessarios = capitulosOrdenados.Sum(c => c.QtdAulasPrevistas);
-        if (slotsNecessarios == 0)
-        {
+        if (diasPlanejamento.Count == 0)
             return new ResultadoGeracao([], null);
-        }
 
+        var slotsNecessarios = diasPlanejamento.Count;
         var diasSet = new HashSet<int>(diasSemana);
-        var datasValidas = new List<DateOnly>();
+        var datasValidas = new List<DateOnly>(slotsNecessarios);
         var cursor = dataInicio;
 
         for (var i = 0; i < maxDiasVarredura && datasValidas.Count < slotsNecessarios; i++)
         {
-            var dow = (int)cursor.DayOfWeek;
-            if (diasSet.Contains(dow) && !diaSuspendeAula(cursor))
-            {
+            if (diasSet.Contains((int)cursor.DayOfWeek) && !diaSuspendeAula(cursor))
                 datasValidas.Add(cursor);
-            }
 
             cursor = cursor.AddDays(1);
         }
@@ -49,15 +48,14 @@ internal static class TurmaAulaGerador
         }
 
         var aulas = new List<AulaPlanejada>(slotsNecessarios);
-        var indiceData = 0;
-        var numeroAula = 1;
-
-        foreach (var cap in capitulosOrdenados)
+        for (var i = 0; i < diasPlanejamento.Count; i++)
         {
-            for (var n = 0; n < cap.QtdAulasPrevistas; n++)
-            {
-                aulas.Add(new AulaPlanejada(cap.Id, numeroAula++, datasValidas[indiceData++]));
-            }
+            var diaPlan = diasPlanejamento[i];
+            var capPrincipalId = diaPlan.Alocacoes
+                .OrderBy(a => a.Ordem)
+                .FirstOrDefault()?.CapituloId ?? 0;
+
+            aulas.Add(new AulaPlanejada(capPrincipalId, i + 1, datasValidas[i], diaPlan.Ordem));
         }
 
         var termino = aulas.Count > 0 ? aulas[^1].DataAula : (DateOnly?)null;

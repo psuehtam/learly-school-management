@@ -1,0 +1,44 @@
+---
+description: Regras de produção e de negócio do Learly. Ler antes de alterar matrícula, pré-aluno, permissões, escola ou schema.
+alwaysApply: true
+---
+
+# Regras do Learly
+
+Leia `docs/regras-learly.md` antes de mexer em fluxo de matrícula, pré-aluno, permissões, multi-escola ou schema. Abaixo estão as regras inegociáveis.
+
+## Fluxos que não podem quebrar
+- Aluno só nasce por: **pré-aluno -> aprovação da secretaria -> aluno + matrícula `Em Espera`**.
+- NÃO recriar `POST /api/alunos` nem a permissão `CRIAR_ALUNO` (foram removidos de propósito).
+- Aprovação usa `APROVAR_MATRICULA`. Enturmar usa `EDITAR_MATRICULA`.
+- NUNCA apagar `AlunosService.CriarAlunoAsync`: a aprovação de pré-aluno depende dele internamente.
+
+## Multi-escola (crítico)
+- Toda query/service/endpoint DEVE filtrar pela escola do JWT (`escolaId` / `codigoEscola`).
+- Nunca retornar dados sem o filtro de escola.
+
+## Datas
+- Carimbos/textos exibidos ao usuário em horário de Brasília (`DataHoraBrasil`), não UTC.
+
+## Permissão nova: alterar em TODOS estes lugares
+1. `database/setup.sql` (catálogo + template do perfil)
+2. `database/seed_cwb_idiomas.sql` (se aplicável)
+3. `backend/Learly.API/Configuration/SecurityConfig.cs` (policy)
+4. `frontend/types/permissao.ts`
+5. `frontend/components/super-admin/GerenciarTemplates.tsx`
+6. `frontend/lib/menu-config.tsx` (se controla item de menu)
+
+## Arquitetura
+- Backend: Controller fino -> Service (regra) -> Repository (dados). Erros via `DomainException` ou result types, não `throw` genérico.
+- Frontend: API sempre via `frontend/lib/api/*` e `client.ts`. Permissões via `hasPermission` + `menu-config`.
+- Banco: mudança de schema em `database/setup.sql`.
+
+## Segurança
+- Nunca commitar `.env*`, senhas ou `Jwt:Key`. `appsettings.json` no repo fica com segredos vazios.
+
+## Antes de finalizar
+- Frontend: `npm run build` deve passar (checa tipos). Backend: `dotnet build` deve passar.
+- Sem imports/variáveis/rotas mortos.
+
+## Em caso de dúvida
+- Se a mudança afeta matrícula, pré-aluno, permissão ou escola e não está coberta aqui, pergunte antes de implementar.

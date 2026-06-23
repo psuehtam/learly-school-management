@@ -35,7 +35,6 @@ export type PermissaoNome =
   | "CRIAR_PERFIL"
   | "EDITAR_PERFIL"
   // Alunos
-  | "CRIAR_ALUNO"
   | "VISUALIZAR_ALUNO"
   | "EDITAR_ALUNO"
   | "INATIVAR_ALUNO"
@@ -102,6 +101,7 @@ export type PermissaoNome =
   | "INATIVAR_CAPITULO"
   | "MARCAR_CAPITULO_CONCLUIDO"
   | "VISUALIZAR_PROGRESSO_CAPITULO"
+  | "PLANEJAR_LIVRO"
   // Calendário
   | "GERENCIAR_CALENDARIO"
   | "VISUALIZAR_CALENDARIO"

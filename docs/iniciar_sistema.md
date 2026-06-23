@@ -67,4 +67,10 @@ dotnet run --project "Learly.API.csproj"
 --FRONTEND--
 cd frontend
 npm install
+npm run build
+
+npm run start
+
+ou 
+
 npm run dev

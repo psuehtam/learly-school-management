@@ -10,4 +10,6 @@ public sealed class CriarTurmaRequest
     public List<int>? DiasSemana { get; set; }
     public string? HorarioInicio { get; set; }
     public string? HorarioFim { get; set; }
+    /// <summary>Matrículas em espera sem turma que devem ser enturmadas na nova turma.</summary>
+    public List<int>? MatriculaIds { get; set; }
 }

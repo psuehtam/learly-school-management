@@ -16,10 +16,12 @@ namespace Learly.API.Controllers;
 public sealed class LivrosController : ControllerBase
 {
     private readonly ILivrosEscolaService _livros;
+    private readonly ILivroPlanejamentoService _planejamento;
 
-    public LivrosController(ILivrosEscolaService livros)
+    public LivrosController(ILivrosEscolaService livros, ILivroPlanejamentoService planejamento)
     {
         _livros = livros;
+        _planejamento = planejamento;
     }
 
     [HttpGet]
@@ -54,6 +56,25 @@ public sealed class LivrosController : ControllerBase
         CancellationToken cancellationToken)
     {
         var resultado = await _livros.AtualizarAsync(id, body, AppUserContextMapper.From(HttpContext.GetUserContext()), cancellationToken);
+        return resultado.ToActionResult(this);
+    }
+
+    [HttpGet("{id:int}/planejamento")]
+    [RequirePermission("PLANEJAR_LIVRO")]
+    public async Task<IActionResult> ObterPlanejamento(int id, CancellationToken cancellationToken)
+    {
+        var resultado = await _planejamento.ObterPlanejamentoAsync(id, AppUserContextMapper.From(HttpContext.GetUserContext()), cancellationToken);
+        return resultado.ToActionResult(this);
+    }
+
+    [HttpPut("{id:int}/planejamento")]
+    [RequirePermission("PLANEJAR_LIVRO")]
+    public async Task<IActionResult> SalvarPlanejamento(
+        int id,
+        [FromBody] SalvarPlanejamentoRequest body,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _planejamento.SalvarPlanejamentoAsync(id, body, AppUserContextMapper.From(HttpContext.GetUserContext()), cancellationToken);
         return resultado.ToActionResult(this);
     }
 }

@@ -16,7 +16,7 @@ public sealed class CapituloConfiguration : IEntityTypeConfiguration<Capitulo>
         builder.Property(c => c.EscolaId).HasColumnName("escola_id");
         builder.Property(c => c.LivroId).HasColumnName("livro_id");
         builder.Property(c => c.Nome).HasColumnName("nome").HasMaxLength(100).IsRequired();
-        builder.Property(c => c.QtdAulasPrevistas).HasColumnName("qtd_aulas_previstas");
+        builder.Property(c => c.DuracaoMinutos).HasColumnName("duracao_minutos").IsRequired();
         builder.Property(c => c.Status)
             .HasColumnName("status")
             .HasColumnType("enum('Ativo', 'Inativo')")

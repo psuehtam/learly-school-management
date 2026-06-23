@@ -16,7 +16,14 @@ import {
   type HorarioFuncionamentoDto,
 } from "@/lib/api/configuracoes";
 import { listarLivrosEscola, type LivroEscolaDto } from "@/lib/api/livros";
+import { listarMatriculas, type MatriculaListItem } from "@/lib/api/matriculas";
 import { listarUsuariosMinhaEscola, type UsuarioMinhaEscola } from "@/lib/api/usuarios";
+import { listarEventos, type EventoCalendario } from "@/lib/api/calendario";
+import { obterConfiguracoesEscolaConsultaTurmas } from "@/lib/api/minha-escola";
+import {
+  parseMesAnoDeDataIso,
+  validarDataInicioTurma,
+} from "@/lib/turmas/validar-data-inicio-turma";
 import { getApiErrorMessage } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { hasPermission } from "@/lib/permissions";
@@ -68,6 +75,10 @@ function formatarDataBr(iso: string): string {
   const [y, m, d] = iso.split("-");
   if (!y || !m || !d) return iso;
   return `${d}/${m}/${y}`;
+}
+
+function labelAlunoMatricula(matricula: MatriculaListItem): string {
+  return matricula.alunoNomeCompleto?.trim() || `Aluno #${matricula.alunoId}`;
 }
 
 function mapApiTurma(t: {
@@ -231,8 +242,8 @@ function HorariosFields({
   );
 }
 
-function AlunosHint({ total, compact }: { total: number; compact?: boolean }) {
-  const ok = total >= 3;
+function AlunosHint({ total, compact, minAlunos = 3 }: { total: number; compact?: boolean; minAlunos?: number }) {
+  const ok = total >= minAlunos;
   if (compact) {
     return (
       <div>
@@ -243,7 +254,7 @@ function AlunosHint({ total, compact }: { total: number; compact?: boolean }) {
   }
   return (
     <div className={`rounded-lg border px-4 py-3 text-sm ${ok ? "border-zinc-200 bg-zinc-50 text-zinc-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
-      <strong>{total}</strong> aluno(s) matriculado(s). Mínimo para ativar: <strong>3</strong>.
+      <strong>{total}</strong> aluno(s) matriculado(s). Mínimo para ativar: <strong>{minAlunos}</strong>.
     </div>
   );
 }
@@ -264,6 +275,10 @@ function ModalNovaTurma({
   livros,
   professores,
   horariosFuncionamento,
+  matriculasElegiveis,
+  carregandoMatriculas,
+  erroMatriculas,
+  onReloadMatriculas,
   onClose,
   onSave,
   saving,
@@ -271,6 +286,10 @@ function ModalNovaTurma({
   livros: LivroEscolaDto[];
   professores: UsuarioMinhaEscola[];
   horariosFuncionamento: HorarioFuncionamentoDto[];
+  matriculasElegiveis: MatriculaListItem[];
+  carregandoMatriculas: boolean;
+  erroMatriculas: string | null;
+  onReloadMatriculas: () => void;
   onClose: () => void;
   onSave: (payload: CriarTurmaPayload) => void;
   saving: boolean;
@@ -282,42 +301,70 @@ function ModalNovaTurma({
   const [dias, setDias] = useState<number[]>([]);
   const [horaIni, setHoraIni] = useState("");
   const [horaFim, setHoraFim] = useState("");
+  const [buscaMatricula, setBuscaMatricula] = useState("");
+  const [matriculaIdsSelecionadas, setMatriculaIdsSelecionadas] = useState<number[]>([]);
+  const [erro, setErro] = useState<string | null>(null);
 
   const profsAtivos = professores.filter(
     (p) => p.status === "Ativo" && p.perfilNome.toLowerCase().includes("professor"),
   );
   const livrosAtivos = livros.filter((l) => l.status === "Ativo");
+  const matriculasFiltradas = useMemo(() => {
+    const termo = buscaMatricula.trim().toLowerCase();
+    const ordenadas = [...matriculasElegiveis].sort((a, b) =>
+      labelAlunoMatricula(a).localeCompare(labelAlunoMatricula(b), "pt-BR"),
+    );
+    if (!termo) return ordenadas;
+
+    return ordenadas.filter((m) =>
+      `${labelAlunoMatricula(m)} ${m.alunoId} ${m.id}`.toLowerCase().includes(termo),
+    );
+  }, [buscaMatricula, matriculasElegiveis]);
 
   function toggleDia(v: number) {
     setDias((prev) => (prev.includes(v) ? prev.filter((d) => d !== v) : [...prev, v]));
   }
 
+  function toggleMatricula(matriculaId: number) {
+    setMatriculaIdsSelecionadas((prev) =>
+      prev.includes(matriculaId)
+        ? prev.filter((id) => id !== matriculaId)
+        : [...prev, matriculaId],
+    );
+  }
+
   function handleSave() {
     if (!professorId || !livroId) {
-      alert("Professor e livro são obrigatórios.");
+      setErro("Professor e livro são obrigatórios.");
       return;
     }
     const erroHorario = validarHorarioTurmaFuncionamento(dias, horaIni, horaFim, horariosFuncionamento);
     if (erroHorario) {
-      alert(erroHorario);
+      setErro(erroHorario);
       return;
     }
+    setErro(null);
     onSave({
       professorId: Number(professorId),
       livroId: Number(livroId),
-      sala: sala || undefined,
-      observacoes: observacoes || undefined,
+      sala: sala.trim() || undefined,
+      observacoes: observacoes.trim() || undefined,
       diasSemana: dias.length > 0 ? dias : undefined,
       horarioInicio: horaIni || undefined,
       horarioFim: horaFim || undefined,
+      matriculaIds: matriculaIdsSelecionadas.length > 0 ? matriculaIdsSelecionadas : undefined,
     });
   }
 
   return (
     <ModalShell title="Criar nova turma" onClose={onClose}>
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Status inicial: <strong>Em Espera</strong>. Ativação exige ≥3 alunos e data de início.
+        Status inicial: <strong>Em Espera</strong>. Você pode criar a turma vazia ou já enturmar alunos da fila de espera.
       </div>
+
+      {erro && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{erro}</div>
+      )}
 
       <Field label="Professor *">
         <select value={professorId} onChange={(e) => setProfessorId(e.target.value)} className={inputCls}>
@@ -335,7 +382,7 @@ function ModalNovaTurma({
           <option value="">Selecione</option>
           {livrosAtivos.map((l) => (
             <option key={l.id} value={l.id}>
-              {l.nome} ({l.totalAulasPrevistas} aulas)
+              {l.nome} ({l.totalDuracaoMinutos} min)
             </option>
           ))}
         </select>
@@ -360,6 +407,81 @@ function ModalNovaTurma({
         />
       </Field>
 
+      <div className="space-y-3 rounded-lg border border-zinc-200 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-900">Enturmar alunos agora</h3>
+            <p className="text-xs text-zinc-500">
+              Selecione matrículas em espera sem turma para vincular automaticamente à nova turma.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onReloadMatriculas}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            Atualizar lista
+          </button>
+        </div>
+
+        <Field label="Buscar por aluno ou matrícula">
+          <input
+            value={buscaMatricula}
+            onChange={(e) => setBuscaMatricula(e.target.value)}
+            className={inputCls}
+            placeholder="Nome do aluno, AlunoId ou MatrículaId"
+          />
+        </Field>
+
+        {erroMatriculas && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {erroMatriculas}
+          </div>
+        )}
+
+        {carregandoMatriculas ? (
+          <p className="text-sm text-zinc-500">Carregando matrículas elegíveis…</p>
+        ) : matriculasElegiveis.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-zinc-300 px-3 py-4 text-sm text-zinc-500">
+            Nenhuma matrícula em espera sem turma disponível no momento.
+          </p>
+        ) : (
+          <>
+            <p className="text-xs text-zinc-500">
+              {matriculaIdsSelecionadas.length} matrícula(s) selecionada(s) para a nova turma.
+            </p>
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-100">
+              {matriculasFiltradas.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-zinc-500">Nenhuma matrícula encontrada para o filtro informado.</p>
+              ) : (
+                <div className="divide-y divide-zinc-100">
+                  {matriculasFiltradas.map((matricula) => (
+                    <label
+                      key={matricula.id}
+                      className="flex cursor-pointer items-start gap-3 px-3 py-3 hover:bg-zinc-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={matriculaIdsSelecionadas.includes(matricula.id)}
+                        onChange={() => toggleMatricula(matricula.id)}
+                        className="mt-0.5 h-4 w-4 rounded border-zinc-300"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-900">{labelAlunoMatricula(matricula)}</p>
+                        <p className="text-xs text-zinc-500">
+                          Matrícula #{matricula.id} · aluno #{matricula.alunoId} · ingresso em{" "}
+                          {formatarDataBr(matricula.dataMatricula)}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       <ModalFooter onClose={onClose} onConfirm={handleSave} confirmLabel="Salvar em espera" saving={saving} />
     </ModalShell>
   );
@@ -368,12 +490,14 @@ function ModalNovaTurma({
 function ModalAgendarTurma({
   turma,
   horariosFuncionamento,
+  minAlunosTurma,
   onClose,
   onSave,
   saving,
 }: {
   turma: TurmaView;
   horariosFuncionamento: HorarioFuncionamentoDto[];
+  minAlunosTurma: number;
   onClose: () => void;
   onSave: (payload: AtivarTurmaPayload) => void;
   saving: boolean;
@@ -383,6 +507,27 @@ function ModalAgendarTurma({
   const [horaIni, setHoraIni] = useState(turma.horarioInicio);
   const [horaFim, setHoraFim] = useState(turma.horarioFim);
   const [sala, setSala] = useState(turma.sala);
+  const [eventosMes, setEventosMes] = useState<EventoCalendario[]>([]);
+
+  useEffect(() => {
+    if (!dataInicio) {
+      setEventosMes([]);
+      return;
+    }
+    const parsed = parseMesAnoDeDataIso(dataInicio);
+    if (!parsed) return;
+    let cancelled = false;
+    void listarEventos(parsed.mes, parsed.ano)
+      .then((lista) => {
+        if (!cancelled) setEventosMes(lista);
+      })
+      .catch(() => {
+        if (!cancelled) setEventosMes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dataInicio]);
 
   function toggleDia(v: number) {
     setDias((prev) => (prev.includes(v) ? prev.filter((d) => d !== v) : [...prev, v]));
@@ -393,8 +538,13 @@ function ModalAgendarTurma({
       alert("Preencha dias, data de início e horários.");
       return;
     }
-    if (turma.totalAlunos < 3) {
-      alert(`Mínimo 3 alunos ativos. Atual: ${turma.totalAlunos}.`);
+    if (turma.totalAlunos < minAlunosTurma) {
+      alert(`Mínimo ${minAlunosTurma} alunos ativos. Atual: ${turma.totalAlunos}.`);
+      return;
+    }
+    const erroData = validarDataInicioTurma(dataInicio, dias, eventosMes);
+    if (erroData) {
+      alert(erroData);
       return;
     }
     const erroHorario = validarHorarioTurmaFuncionamento(dias, horaIni, horaFim, horariosFuncionamento);
@@ -411,14 +561,24 @@ function ModalAgendarTurma({
     });
   }
 
+  const diasLabel = dias
+    .map((d) => DIAS_OPCOES.find((o) => o.value === d)?.label ?? "")
+    .filter(Boolean)
+    .join(", ");
+
   return (
     <ModalShell title="Ativar turma" subtitle={turma.nome} onClose={onClose}>
-      <AlunosHint total={turma.totalAlunos} />
+      <AlunosHint total={turma.totalAlunos} minAlunos={minAlunosTurma} />
       <Field label="Dias da semana *">
         <DiasSelector dias={dias} toggle={toggleDia} />
       </Field>
       <Field label="Data de início *">
         <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className={inputCls} />
+        {dias.length > 0 ? (
+          <p className="mt-1 text-xs text-zinc-500">
+            A data deve ser um(a): {diasLabel}. Feriados e dias sem aula do calendário não são permitidos.
+          </p>
+        ) : null}
       </Field>
       <HorariosFields horaIni={horaIni} horaFim={horaFim} setIni={setHoraIni} setFim={setHoraFim} />
       <Field label="Sala">
@@ -610,8 +770,59 @@ export default function TurmasPage() {
   const [livros, setLivros] = useState<LivroEscolaDto[]>([]);
   const [professores, setProfessores] = useState<UsuarioMinhaEscola[]>([]);
   const [horariosFuncionamento, setHorariosFuncionamento] = useState<HorarioFuncionamentoDto[]>([]);
+  const [matriculasElegiveis, setMatriculasElegiveis] = useState<MatriculaListItem[]>([]);
+  const [carregandoMatriculas, setCarregandoMatriculas] = useState(false);
+  const [erroMatriculas, setErroMatriculas] = useState<string | null>(null);
   const [filtroProfessor, setFiltroProfessor] = useState("todos");
   const [filtroLivro, setFiltroLivro] = useState("todos");
+  const [minAlunosTurma, setMinAlunosTurma] = useState(3);
+
+  const profsParaFiltro = useMemo(() => {
+    const profsAtivos = professores.filter(
+      (p) => p.status === "Ativo" && p.perfilNome.toLowerCase().includes("professor"),
+    );
+    const idsAtivos = new Set(profsAtivos.map((p) => p.id));
+    const extras = new Map<number, string>();
+    for (const t of turmas) {
+      if (!idsAtivos.has(t.professorId)) {
+        extras.set(t.professorId, t.professor);
+      }
+    }
+    return [
+      ...profsAtivos.map((p) => ({ id: p.id, nome: p.nomeCompleto })),
+      ...Array.from(extras.entries()).map(([id, nome]) => ({ id, nome: `${nome} (inativo)` })),
+    ].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [professores, turmas]);
+
+  const turmasBaseFiltradas = useMemo(() => {
+    return turmas.filter((t) => {
+      const profOk = filtroProfessor === "todos" || String(t.professorId) === filtroProfessor;
+      const livroOk = filtroLivro === "todos" || String(t.livroId) === filtroLivro;
+      return profOk && livroOk;
+    });
+  }, [turmas, filtroProfessor, filtroLivro]);
+
+  const turmasFiltradas = useMemo(() => {
+    return turmasBaseFiltradas.filter((t) => {
+      return aba === "andamento"
+        ? t.status === "Em Andamento"
+        : aba === "espera"
+          ? t.status === "Em Espera"
+          : aba === "concluidas"
+            ? t.status === "Concluida"
+            : t.status === "Inativa" || t.status === "Cancelada";
+    });
+  }, [turmasBaseFiltradas, aba]);
+
+  const counts = useMemo(
+    () => ({
+      andamento: turmasBaseFiltradas.filter((t) => t.status === "Em Andamento").length,
+      espera: turmasBaseFiltradas.filter((t) => t.status === "Em Espera").length,
+      concluidas: turmasBaseFiltradas.filter((t) => t.status === "Concluida").length,
+      inativas: turmasBaseFiltradas.filter((t) => t.status === "Inativa" || t.status === "Cancelada").length,
+    }),
+    [turmasBaseFiltradas],
+  );
 
   const carregar = useCallback(async () => {
     if (authLoading) return;
@@ -657,6 +868,20 @@ export default function TurmasPage() {
     };
   }, [authLoading, user]);
 
+  const carregarMatriculasElegiveis = useCallback(async () => {
+    setCarregandoMatriculas(true);
+    setErroMatriculas(null);
+    try {
+      const lista = await listarMatriculas({ status: "Em Espera" });
+      setMatriculasElegiveis(lista);
+    } catch (e) {
+      setErroMatriculas(getApiErrorMessage(e, "Não foi possível carregar as matrículas em espera."));
+      setMatriculasElegiveis([]);
+    } finally {
+      setCarregandoMatriculas(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (authLoading || !podeGerenciarTurma) return;
     void listarLivrosEscola().then(setLivros).catch(() => setLivros([]));
@@ -664,33 +889,11 @@ export default function TurmasPage() {
     void listarHorariosFuncionamentoConsultaTurmas()
       .then(setHorariosFuncionamento)
       .catch(() => setHorariosFuncionamento([]));
-  }, [authLoading, podeGerenciarTurma]);
-
-  const turmasFiltradas = useMemo(() => {
-    return turmas.filter((t) => {
-      const abaOk =
-        aba === "andamento"
-          ? t.status === "Em Andamento"
-          : aba === "espera"
-            ? t.status === "Em Espera"
-            : aba === "concluidas"
-              ? t.status === "Concluida"
-              : t.status === "Inativa" || t.status === "Cancelada";
-      const profOk = filtroProfessor === "todos" || String(t.professorId) === filtroProfessor;
-      const livroOk = filtroLivro === "todos" || String(t.livroId) === filtroLivro;
-      return abaOk && profOk && livroOk;
-    });
-  }, [turmas, aba, filtroProfessor, filtroLivro]);
-
-  const counts = useMemo(
-    () => ({
-      andamento: turmas.filter((t) => t.status === "Em Andamento").length,
-      espera: turmas.filter((t) => t.status === "Em Espera").length,
-      concluidas: turmas.filter((t) => t.status === "Concluida").length,
-      inativas: turmas.filter((t) => t.status === "Inativa" || t.status === "Cancelada").length,
-    }),
-    [turmas],
-  );
+    void obterConfiguracoesEscolaConsultaTurmas()
+      .then((cfg) => setMinAlunosTurma(cfg.minAlunosTurma))
+      .catch(() => setMinAlunosTurma(3));
+    void carregarMatriculasElegiveis();
+  }, [authLoading, carregarMatriculasElegiveis, podeGerenciarTurma]);
 
   async function handleCriar(payload: CriarTurmaPayload) {
     setSaving(true);
@@ -698,7 +901,7 @@ export default function TurmasPage() {
       await criarTurma(payload);
       setModalNova(false);
       setAba("espera");
-      await carregar();
+      await Promise.all([carregar(), carregarMatriculasElegiveis()]);
     } catch (e) {
       alert(getApiErrorMessage(e, "Não foi possível criar a turma."));
     } finally {
@@ -833,9 +1036,9 @@ export default function TurmasPage() {
         <div className="flex flex-wrap gap-3">
           <select value={filtroProfessor} onChange={(e) => setFiltroProfessor(e.target.value)} className={inputCls}>
             <option value="todos">Todos os professores</option>
-            {professores.map((p) => (
+            {profsParaFiltro.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.nomeCompleto}
+                {p.nome}
               </option>
             ))}
           </select>
@@ -877,6 +1080,10 @@ export default function TurmasPage() {
           livros={livros}
           professores={professores}
           horariosFuncionamento={horariosFuncionamento}
+          matriculasElegiveis={matriculasElegiveis}
+          carregandoMatriculas={carregandoMatriculas}
+          erroMatriculas={erroMatriculas}
+          onReloadMatriculas={() => void carregarMatriculasElegiveis()}
           onClose={() => setModalNova(false)}
           onSave={handleCriar}
           saving={saving}
@@ -886,6 +1093,7 @@ export default function TurmasPage() {
         <ModalAgendarTurma
           turma={turmaAgendando}
           horariosFuncionamento={horariosFuncionamento}
+          minAlunosTurma={minAlunosTurma}
           onClose={() => setTurmaAgendando(null)}
           onSave={handleAtivar}
           saving={saving}

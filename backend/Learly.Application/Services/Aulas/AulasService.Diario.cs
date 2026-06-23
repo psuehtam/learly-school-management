@@ -178,7 +178,7 @@ public sealed partial class AulasService
             Matricula.Estados.Ativo,
             null,
             turmaId,
-            cancellationToken);
+            cancellationToken: cancellationToken);
         return mats.Select(m => m.AlunoId).ToHashSet();
     }
 

@@ -19,6 +19,8 @@ export interface MatriculaListItem {
 
 export interface ListarMatriculasFiltro {
   status?: MatriculaStatus;
+  /** "inativos" → Cancelado + Trancado + Concluido */
+  grupo?: "inativos";
   alunoId?: number;
   turmaId?: number;
 }
@@ -48,7 +50,8 @@ function normalizarItemMatricula(raw: MatriculaListItem): MatriculaListItem {
 export async function listarMatriculas(filtro?: ListarMatriculasFiltro): Promise<MatriculaListItem[]> {
   const params = new URLSearchParams();
 
-  if (filtro?.status) params.set("status", filtro.status);
+  if (filtro?.grupo) params.set("grupo", filtro.grupo);
+  else if (filtro?.status) params.set("status", filtro.status);
   if (typeof filtro?.alunoId === "number") params.set("alunoId", String(filtro.alunoId));
   if (typeof filtro?.turmaId === "number") params.set("turmaId", String(filtro.turmaId));
 

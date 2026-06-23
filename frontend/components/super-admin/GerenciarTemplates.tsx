@@ -67,7 +67,6 @@ const PAGINAS_PERMISSOES: { id: string; rotulo: string; permissoes: string[] }[]
     rotulo: "Alunos",
     permissoes: [
       "VISUALIZAR_ALUNO",
-      "CRIAR_ALUNO",
       "EDITAR_ALUNO",
       "INATIVAR_ALUNO",
       "TRANCAR_ALUNO",
@@ -157,6 +156,7 @@ const PAGINAS_PERMISSOES: { id: string; rotulo: string; permissoes: string[] }[]
       "INATIVAR_CAPITULO",
       "MARCAR_CAPITULO_CONCLUIDO",
       "VISUALIZAR_PROGRESSO_CAPITULO",
+      "PLANEJAR_LIVRO",
     ],
   },
   {

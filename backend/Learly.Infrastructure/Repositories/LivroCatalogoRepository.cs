@@ -20,7 +20,7 @@ internal sealed class LivroCatalogoRepository(LearlyDbContext db) : ILivroCatalo
                 l.Nome,
                 l.Status,
                 l.Capitulos.Count,
-                l.Capitulos.Sum(c => (int?)c.QtdAulasPrevistas) ?? 0))
+                l.Capitulos.Sum(c => (int?)c.DuracaoMinutos) ?? 0))
             .ToListAsync(cancellationToken);
     }
 
@@ -36,7 +36,7 @@ internal sealed class LivroCatalogoRepository(LearlyDbContext db) : ILivroCatalo
                 l.Nome,
                 l.Status,
                 l.Capitulos.Count,
-                l.Capitulos.Sum(c => (int?)c.QtdAulasPrevistas) ?? 0))
+                l.Capitulos.Sum(c => (int?)c.DuracaoMinutos) ?? 0))
             .ToListAsync(cancellationToken);
     }
 
@@ -78,7 +78,7 @@ internal sealed class LivroCatalogoRepository(LearlyDbContext db) : ILivroCatalo
         return q.AnyAsync(cancellationToken);
     }
 
-    public async Task<(int QuantidadeCapitulos, int TotalAulasPrevistas)> ObterTotaisCapitulosPorLivroAsync(
+    public async Task<(int QuantidadeCapitulos, int TotalDuracaoMinutos)> ObterTotaisCapitulosPorLivroAsync(
         int livroId,
         int escolaId,
         CancellationToken cancellationToken = default)
@@ -88,7 +88,7 @@ internal sealed class LivroCatalogoRepository(LearlyDbContext db) : ILivroCatalo
         if (count == 0)
             return (0, 0);
 
-        var sum = await q.SumAsync(c => c.QtdAulasPrevistas, cancellationToken);
+        var sum = await q.SumAsync(c => c.DuracaoMinutos, cancellationToken);
         return (count, sum);
     }
 

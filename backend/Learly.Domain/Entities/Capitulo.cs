@@ -2,7 +2,7 @@ using Learly.Domain.Exceptions;
 
 namespace Learly.Domain.Entities;
 
-/// <summary>Capítulo de um livro — tabela <c>capitulos</c> (<c>qtd_aulas_previstas</c>).</summary>
+/// <summary>Capítulo de um livro — tabela <c>capitulos</c> (<c>duracao_minutos</c>).</summary>
 public sealed class Capitulo
 {
     public int Id { get; internal set; }
@@ -16,19 +16,18 @@ public sealed class Capitulo
         internal set => _nome = ValidarNome(value);
     }
 
-    private int _qtdAulasPrevistas;
-    public int QtdAulasPrevistas
+    private int _duracaoMinutos;
+    public int DuracaoMinutos
     {
-        get => _qtdAulasPrevistas;
-        internal set => _qtdAulasPrevistas = ValidarQtdAulasPrevistas(value);
+        get => _duracaoMinutos;
+        internal set => _duracaoMinutos = ValidarDuracaoMinutos(value);
     }
 
     private string _status = "Ativo";
     public string Status
     {
         get => _status;
-        internal set =>
-            _status = ValidarStatus(value);
+        internal set => _status = ValidarStatus(value);
     }
 
     public DateTime DataCriacao { get; internal set; }
@@ -48,10 +47,10 @@ public sealed class Capitulo
         return trimmed;
     }
 
-    private static int ValidarQtdAulasPrevistas(int value)
+    private static int ValidarDuracaoMinutos(int value)
     {
         if (value <= 0)
-            throw new DomainException("Quantidade de aulas previstas deve ser maior que zero.");
+            throw new DomainException("Duracao do capitulo deve ser maior que zero minutos.");
 
         return value;
     }

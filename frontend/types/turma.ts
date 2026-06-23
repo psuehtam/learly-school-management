@@ -52,6 +52,7 @@ export type CriarTurmaPayload = {
   diasSemana?: number[];
   horarioInicio?: string;
   horarioFim?: string;
+  matriculaIds?: number[];
 };
 
 export type AtualizarTurmaPayload = {

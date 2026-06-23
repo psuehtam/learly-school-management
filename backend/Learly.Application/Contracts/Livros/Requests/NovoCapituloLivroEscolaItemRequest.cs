@@ -9,6 +9,7 @@ public sealed class NovoCapituloLivroEscolaItemRequest
     [MaxLength(100)]
     public string? Nome { get; set; }
 
-    [Range(1, 500)]
-    public int QtdAulasPrevistas { get; set; }
+    /// <summary>Duração do capítulo em minutos inteiros.</summary>
+    [Range(1, int.MaxValue)]
+    public int DuracaoMinutos { get; set; }
 }

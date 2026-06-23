@@ -27,7 +27,7 @@ public interface ILivroCatalogoRepository
         int? excluirLivroId,
         CancellationToken cancellationToken = default);
 
-    Task<(int QuantidadeCapitulos, int TotalAulasPrevistas)> ObterTotaisCapitulosPorLivroAsync(
+    Task<(int QuantidadeCapitulos, int TotalDuracaoMinutos)> ObterTotaisCapitulosPorLivroAsync(
         int livroId,
         int escolaId,
         CancellationToken cancellationToken = default);

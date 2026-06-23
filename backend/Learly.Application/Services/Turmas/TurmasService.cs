@@ -2,6 +2,8 @@ using Learly.Application.Contracts.Turmas;
 using Learly.Application.Contracts.Turmas.Requests;
 using Learly.Application.Contracts.Turmas.Responses;
 using Learly.Application.Services.Common;
+using Learly.Application.Services.Escolas;
+using Learly.Application.Services.Matriculas;
 using Learly.Domain.Entities;
 using Learly.Domain.Exceptions;
 using Learly.Domain.Interfaces.Persistence;
@@ -13,6 +15,7 @@ public sealed partial class TurmasService : ITurmasService
 {
     private readonly ITurmaRepository _turmas;
     private readonly ILivroCatalogoRepository _livros;
+    private readonly ILivroPlanejamentoRepository _planejamento;
     private readonly IUsuarioRepository _usuarios;
     private readonly ICalendarioGeralRepository _calendario;
     private readonly IAulaRepository _aulas;
@@ -30,6 +33,7 @@ public sealed partial class TurmasService : ITurmasService
     public TurmasService(
         ITurmaRepository turmas,
         ILivroCatalogoRepository livros,
+        ILivroPlanejamentoRepository planejamento,
         IUsuarioRepository usuarios,
         ICalendarioGeralRepository calendario,
         IAulaRepository aulas,
@@ -41,6 +45,7 @@ public sealed partial class TurmasService : ITurmasService
     {
         _turmas = turmas;
         _livros = livros;
+        _planejamento = planejamento;
         _usuarios = usuarios;
         _calendario = calendario;
         _aulas = aulas;
@@ -168,17 +173,21 @@ public sealed partial class TurmasService : ITurmasService
             return Falha("Horario fim deve ser maior que horario inicio.", TurmasFalha.Validacao);
         }
 
-        if (request.DiasSemana is { Count: > 0 } && (hi is not null || hf is not null))
+        IReadOnlyList<int> diasCriacao = [];
+        if (request.DiasSemana is { Count: > 0 })
+        {
+            diasCriacao = NormalizarDiasSemana(request.DiasSemana);
+            if (diasCriacao.Count == 0)
+            {
+                return Falha("Dias da semana invalidos.", TurmasFalha.Validacao);
+            }
+        }
+
+        if (diasCriacao.Count > 0 && (hi is not null || hf is not null))
         {
             if (hi is null || hf is null)
             {
                 return Falha("Informe horario de inicio e termino ao definir dias da semana.", TurmasFalha.Validacao);
-            }
-
-            var diasCriacao = NormalizarDiasSemana(request.DiasSemana);
-            if (diasCriacao.Count == 0)
-            {
-                return Falha("Dias da semana invalidos.", TurmasFalha.Validacao);
             }
 
             var erroFuncionamento = await ValidarHorarioDentroFuncionamentoAsync(
@@ -193,35 +202,66 @@ public sealed partial class TurmasService : ITurmasService
             }
         }
 
-        var nomeProvisorio = $"Turma {livro.Nome} - EM ESPERA";
-        var turma = new Turma
+        var validacaoMatriculaIds = MatriculaEnturmacaoRules.NormalizarMatriculaIds(
+            request.MatriculaIds,
+            out var matriculaIds);
+        if (!validacaoMatriculaIds.Ok)
         {
-            EscolaId = escolaId.Value,
-            ProfessorId = request.ProfessorId,
-            LivroId = request.LivroId,
-            Nome = nomeProvisorio,
-            Sala = request.Sala,
-            Observacoes = request.Observacoes,
-            Status = Turma.Estados.EmEspera
-        };
-        turma.DefinirHorarios(hi, hf);
-
-        _turmas.Adicionar(turma);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        if (request.DiasSemana is { Count: > 0 })
-        {
-            var dias = NormalizarDiasSemana(request.DiasSemana);
-            if (dias.Count == 0)
-            {
-                return Falha("Dias da semana invalidos.", TurmasFalha.Validacao);
-            }
-
-            await _turmas.SubstituirDiasSemanaAsync(escolaId.Value, turma.Id, dias, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return Falha(
+                validacaoMatriculaIds.Mensagem!,
+                TurmasFalha.Validacao,
+                validacaoMatriculaIds.StatusCode);
         }
 
-        return await ObterOperacaoDetalheAsync(turma.Id, escolaId.Value, cancellationToken);
+        TurmaOperacaoResultado? erroTransacao = null;
+        var turmaId = 0;
+
+        try
+        {
+            await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var turma = new Turma
+                {
+                    EscolaId = escolaId.Value,
+                    ProfessorId = request.ProfessorId,
+                    LivroId = request.LivroId,
+                    Nome = $"Turma {livro.Nome} - EM ESPERA",
+                    Sala = request.Sala,
+                    Observacoes = request.Observacoes,
+                    Status = Turma.Estados.EmEspera
+                };
+                turma.DefinirHorarios(hi, hf);
+
+                _turmas.Adicionar(turma);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                turmaId = turma.Id;
+
+                if (diasCriacao.Count > 0)
+                {
+                    await _turmas.SubstituirDiasSemanaAsync(escolaId.Value, turma.Id, diasCriacao, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+
+                if (matriculaIds.Count > 0)
+                {
+                    erroTransacao = await VincularMatriculasNaNovaTurmaAsync(
+                        escolaId.Value,
+                        turma.Id,
+                        matriculaIds,
+                        cancellationToken);
+                    if (!erroTransacao.Ok)
+                    {
+                        throw new DomainException(erroTransacao.Mensagem ?? "Falha ao enturmar alunos na nova turma.");
+                    }
+                }
+            }, cancellationToken);
+        }
+        catch (DomainException ex)
+        {
+            return erroTransacao ?? Falha(ex.Message, TurmasFalha.Validacao);
+        }
+
+        return await ObterOperacaoDetalheAsync(turmaId, escolaId.Value, cancellationToken);
     }
 
     public async Task<TurmaOperacaoResultado> AtualizarAsync(
@@ -413,9 +453,11 @@ public sealed partial class TurmasService : ITurmasService
         }
 
         var ativos = await _turmas.ContarMatriculasAtivasAsync(id, cancellationToken);
-        if (ativos < Turma.MinimoAlunosParaAtivar)
+        var escolaConfig = await _escolas.ObterPorIdAsync(escolaId.Value, cancellationToken);
+        var minAlunos = escolaConfig?.MinAlunosTurma ?? Turma.MinimoAlunosParaAtivar;
+        if (ativos < minAlunos)
         {
-            return Falha($"A turma precisa de no minimo {Turma.MinimoAlunosParaAtivar} alunos matriculados (ativos). Atual: {ativos}.", TurmasFalha.Validacao);
+            return Falha($"A turma precisa de no minimo {minAlunos} alunos matriculados (ativos). Atual: {ativos}.", TurmasFalha.Validacao);
         }
 
         if (request.DiasSemana is { Count: > 0 })
@@ -479,6 +521,11 @@ public sealed partial class TurmasService : ITurmasService
             return Falha("Data de inicio deve coincidir com um dos dias da semana da turma.", TurmasFalha.Validacao);
         }
 
+        if (await _calendario.DiaSuspendeAulaAsync(escolaId.Value, request.DataInicio, cancellationToken))
+        {
+            return Falha("Data de inicio cai em feriado, recesso ou dia sem aula no calendario.", TurmasFalha.Validacao);
+        }
+
         var erroFuncionamentoAtivar = await ValidarHorarioDentroFuncionamentoAsync(
             escolaId.Value,
             diasSemana,
@@ -512,22 +559,18 @@ public sealed partial class TurmasService : ITurmasService
             return Falha("Livro da turma nao encontrado.", TurmasFalha.Validacao);
         }
 
-        var capitulos = livro.Capitulos
-            .Where(c => string.Equals(c.Status, "Ativo", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(c => c.Id)
-            .ToList();
-
-        if (capitulos.Count == 0)
+        var diasPlanejamento = await _planejamento.ObterDiasComAlocacoesAsync(turma.LivroId, escolaId.Value, cancellationToken);
+        if (diasPlanejamento.Count == 0)
         {
-            return Falha("Livro sem capitulos ativos para gerar aulas.", TurmasFalha.Validacao);
+            return Falha("O livro nao possui planejamento de dias. Salve o planejamento antes de ativar a turma.", TurmasFalha.Validacao);
         }
 
         var suspendeCache = new Dictionary<DateOnly, bool>();
-        async Task<bool> DiaSuspendeAsync(DateOnly d)
+        bool DiaSuspende(DateOnly d)
         {
             if (!suspendeCache.TryGetValue(d, out var s))
             {
-                s = await _calendario.DiaSuspendeAulaAsync(escolaId.Value, d, cancellationToken);
+                s = _calendario.DiaSuspendeAulaAsync(escolaId.Value, d, cancellationToken).GetAwaiter().GetResult();
                 suspendeCache[d] = s;
             }
 
@@ -537,11 +580,11 @@ public sealed partial class TurmasService : ITurmasService
         TurmaAulaGerador.ResultadoGeracao geracao;
         try
         {
-            geracao = await GerarComCalendarioAsync(
+            geracao = TurmaAulaGerador.GerarPorDiasPlanejamento(
                 request.DataInicio,
                 diasSemana,
-                capitulos,
-                DiaSuspendeAsync);
+                diasPlanejamento,
+                DiaSuspende);
         }
         catch (InvalidOperationException ex)
         {
@@ -553,11 +596,12 @@ public sealed partial class TurmasService : ITurmasService
 
         foreach (var planejada in geracao.Aulas)
         {
+            var capId = planejada.CapituloIdPrincipal > 0 ? planejada.CapituloIdPrincipal : (int?)null;
             var aula = new Aula
             {
                 EscolaId = escolaId.Value,
                 TurmaId = id,
-                CapituloId = planejada.CapituloId,
+                CapituloId = capId,
                 ProfessorId = turma.ProfessorId,
                 NumeroAula = planejada.NumeroAula,
                 DataAula = planejada.DataAula,
@@ -568,6 +612,10 @@ public sealed partial class TurmasService : ITurmasService
             };
             _aulas.Adicionar(aula);
         }
+
+        var capitulos = livro.Capitulos
+            .Where(c => string.Equals(c.Status, "Ativo", StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
         await _turmas.InicializarProgressoCapitulosAsync(
             escolaId.Value,
@@ -703,17 +751,18 @@ public sealed partial class TurmasService : ITurmasService
             return;
         }
 
-        var capitulos = livro.Capitulos
-            .Where(c => string.Equals(c.Status, "Ativo", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(c => c.Id)
-            .ToList();
+        var diasPlanejamento = await _planejamento.ObterDiasComAlocacoesAsync(turma.LivroId, escolaId, cancellationToken);
+        if (diasPlanejamento.Count == 0)
+        {
+            return;
+        }
 
         var suspendeCache = new Dictionary<DateOnly, bool>();
-        async Task<bool> DiaSuspendeAsync(DateOnly d)
+        bool DiaSuspende(DateOnly d)
         {
             if (!suspendeCache.TryGetValue(d, out var s))
             {
-                s = await _calendario.DiaSuspendeAulaAsync(escolaId, d, cancellationToken);
+                s = _calendario.DiaSuspendeAulaAsync(escolaId, d, cancellationToken).GetAwaiter().GetResult();
                 suspendeCache[d] = s;
             }
 
@@ -723,11 +772,11 @@ public sealed partial class TurmasService : ITurmasService
         TurmaAulaGerador.ResultadoGeracao geracao;
         try
         {
-            geracao = await GerarComCalendarioAsync(
+            geracao = TurmaAulaGerador.GerarPorDiasPlanejamento(
                 turma.DataInicio.Value,
                 diasSemana,
-                capitulos,
-                DiaSuspendeAsync);
+                diasPlanejamento,
+                DiaSuspende);
         }
         catch (InvalidOperationException)
         {
@@ -738,11 +787,12 @@ public sealed partial class TurmasService : ITurmasService
 
         foreach (var planejada in geracao.Aulas)
         {
+            var capId = planejada.CapituloIdPrincipal > 0 ? planejada.CapituloIdPrincipal : (int?)null;
             var aula = new Aula
             {
                 EscolaId = escolaId,
                 TurmaId = turmaId,
-                CapituloId = planejada.CapituloId,
+                CapituloId = capId,
                 ProfessorId = turma.ProfessorId,
                 NumeroAula = planejada.NumeroAula,
                 DataAula = planejada.DataAula,
@@ -758,54 +808,6 @@ public sealed partial class TurmasService : ITurmasService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    private static async Task<TurmaAulaGerador.ResultadoGeracao> GerarComCalendarioAsync(
-        DateOnly dataInicio,
-        IReadOnlyList<int> diasSemana,
-        IReadOnlyList<Capitulo> capitulos,
-        Func<DateOnly, Task<bool>> diaSuspendeAsync)
-    {
-        var slotsNecessarios = capitulos.Sum(c => c.QtdAulasPrevistas);
-        if (slotsNecessarios == 0)
-        {
-            return new TurmaAulaGerador.ResultadoGeracao([], null);
-        }
-
-        var diasSet = new HashSet<int>(diasSemana);
-        var datasValidas = new List<DateOnly>();
-        var cursor = dataInicio;
-        const int maxDias = 365 * 3;
-
-        for (var i = 0; i < maxDias && datasValidas.Count < slotsNecessarios; i++)
-        {
-            var dow = (int)cursor.DayOfWeek;
-            if (diasSet.Contains(dow) && !await diaSuspendeAsync(cursor))
-            {
-                datasValidas.Add(cursor);
-            }
-
-            cursor = cursor.AddDays(1);
-        }
-
-        if (datasValidas.Count < slotsNecessarios)
-        {
-            throw new InvalidOperationException(
-                $"Nao foi possivel alocar {slotsNecessarios} aulas (encontradas {datasValidas.Count} datas validas).");
-        }
-
-        var aulas = new List<TurmaAulaGerador.AulaPlanejada>(slotsNecessarios);
-        var indiceData = 0;
-        var numeroAula = 1;
-        foreach (var cap in capitulos)
-        {
-            for (var n = 0; n < cap.QtdAulasPrevistas; n++)
-            {
-                aulas.Add(new TurmaAulaGerador.AulaPlanejada(cap.Id, numeroAula++, datasValidas[indiceData++]));
-            }
-        }
-
-        var termino = aulas.Count > 0 ? aulas[^1].DataAula : (DateOnly?)null;
-        return new TurmaAulaGerador.ResultadoGeracao(aulas, termino);
-    }
 
     private async Task<TurmaOperacaoResultado> ObterOperacaoDetalheAsync(
         int turmaId,
@@ -819,8 +821,76 @@ public sealed partial class TurmasService : ITurmasService
             return Falha("Turma nao encontrada apos operacao.", TurmasFalha.NaoEncontrado, 404);
         }
 
-        var (_, totalAulas) = await _livros.ObterTotaisCapitulosPorLivroAsync(row.LivroId, escolaId, cancellationToken);
-        return new TurmaOperacaoResultado(true, MapResponse(row, escolaId, totalAulas), null, TurmasFalha.Nenhuma, 200);
+        var (_, totalDuracaoMinutos) = await _livros.ObterTotaisCapitulosPorLivroAsync(row.LivroId, escolaId, cancellationToken);
+        return new TurmaOperacaoResultado(true, MapResponse(row, escolaId, totalDuracaoMinutos), null, TurmasFalha.Nenhuma, 200);
+    }
+
+    private async Task<TurmaOperacaoResultado> VincularMatriculasNaNovaTurmaAsync(
+        int escolaId,
+        int turmaId,
+        IReadOnlyList<int> matriculaIds,
+        CancellationToken cancellationToken)
+    {
+        var matriculasSelecionadas = await _matriculas.ListarRastreadasPorIdsEEscolaAsync(
+            escolaId,
+            matriculaIds,
+            cancellationToken);
+
+        if (matriculasSelecionadas.Count != matriculaIds.Count)
+        {
+            return Falha("Uma ou mais matriculas selecionadas nao foram encontradas nesta escola.", TurmasFalha.Validacao, 400);
+        }
+
+        var validacaoSelecao = MatriculaEnturmacaoRules.ValidarSelecaoUnicaPorAluno(matriculasSelecionadas);
+        if (!validacaoSelecao.Ok)
+        {
+            return Falha(
+                validacaoSelecao.Mensagem!,
+                TurmasFalha.Conflito,
+                validacaoSelecao.StatusCode);
+        }
+
+        var validacaoCapacidade = await EscolaTurmaCapacidadeRules.ValidarVinculoAsync(
+            _escolas,
+            _turmas,
+            escolaId,
+            turmaId,
+            matriculaIds.Count,
+            cancellationToken);
+        if (!validacaoCapacidade.Ok)
+        {
+            return Falha(validacaoCapacidade.Mensagem!, TurmasFalha.Validacao, 409);
+        }
+
+        var agoraUtc = DateTime.UtcNow;
+        foreach (var matriculaId in matriculaIds)
+        {
+            var matricula = matriculasSelecionadas.First(m => m.Id == matriculaId);
+            var validacaoVinculo = await MatriculaEnturmacaoRules.ValidarVinculoAsync(
+                _matriculas,
+                escolaId,
+                matricula,
+                turmaId,
+                cancellationToken);
+            if (!validacaoVinculo.Ok)
+            {
+                var falha = validacaoVinculo.StatusCode == 409 ? TurmasFalha.Conflito : TurmasFalha.Validacao;
+                return Falha(
+                    $"Matricula #{matricula.Id}: {validacaoVinculo.Mensagem}",
+                    falha,
+                    validacaoVinculo.StatusCode);
+            }
+        }
+
+        foreach (var matricula in matriculasSelecionadas)
+        {
+            matricula.TurmaId = turmaId;
+            matricula.Status = Matricula.Estados.Ativo;
+            matricula.DataAtualizacao = agoraUtc;
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return new TurmaOperacaoResultado(true, null, null, TurmasFalha.Nenhuma, 204);
     }
 
     private static TurmaResponse MapResponse(TurmaListagemItem row, int escolaId, int totalAulasLivro) =>

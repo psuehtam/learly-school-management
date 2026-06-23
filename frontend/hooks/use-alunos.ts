@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { listarAlunos, buscarAluno } from "@/lib/api/alunos";
+import { listarAlunos, buscarAluno, type AlunoDetalhe } from "@/lib/api/alunos";
 import type { Aluno } from "@/types/aluno";
 
 export function useAlunos(filtros?: Record<string, string>) {
@@ -31,7 +31,7 @@ export function useAlunos(filtros?: Record<string, string>) {
 }
 
 export function useAluno(id: number | null) {
-  const [aluno, setAluno] = useState<Aluno | null>(null);
+  const [aluno, setAluno] = useState<AlunoDetalhe | null>(null);
   const [isLoading, setIsLoading] = useState(() => id !== null);
   const [error, setError] = useState<string | null>(null);
 

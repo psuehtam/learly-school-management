@@ -208,6 +208,22 @@ export const SCHOOL_MENU: MenuEntry[] = [
         icon: <IconClock />,
         permission: ["VISUALIZAR_USUARIO", "GERENCIAR_CONFIGURACOES_SISTEMA"],
       },
+      {
+        type: "item",
+        key: "configuracoes-sistema",
+        label: "Configuração do sistema",
+        href: "/configuracoes-sistema",
+        icon: <IconSettings />,
+        permission: ["VISUALIZAR_USUARIO", "GERENCIAR_CONFIGURACOES_SISTEMA"],
+      },
+      {
+        type: "item",
+        key: "dados-escola",
+        label: "Dados da escola",
+        href: "/dados-escola",
+        icon: <IconBuilding />,
+        permission: ["VISUALIZAR_USUARIO", "GERENCIAR_CONFIGURACOES_SISTEMA"],
+      },
     ],
   },
 ];

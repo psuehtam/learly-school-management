@@ -27,6 +27,9 @@ public class LearlyDbContext : DbContext
     public DbSet<Matricula> Matriculas => Set<Matricula>();
     public DbSet<Livro> Livros => Set<Livro>();
     public DbSet<Capitulo> Capitulos => Set<Capitulo>();
+    public DbSet<LivroPlanejamentoDia> LivrosPlanejamentoDias => Set<LivroPlanejamentoDia>();
+    public DbSet<LivroPlanejamentoAlocacao> LivrosPlanejamentoAlocacoes => Set<LivroPlanejamentoAlocacao>();
+    public DbSet<AulaCapituloAlocacao> AulasCapitulosAlocacoes => Set<AulaCapituloAlocacao>();
     public DbSet<Responsavel> Responsaveis => Set<Responsavel>();
     public DbSet<PreResponsavel> PreResponsaveis => Set<PreResponsavel>();
     public DbSet<PreAluno> PreAlunos => Set<PreAluno>();

@@ -52,6 +52,7 @@ if (!app.Environment.IsEnvironment("Testing"))
         ("20260516120000_ContratosAlignColumns",                     "10.0.0"),
         ("20260521120000_PreAlunoDocumentosModule",                 "10.0.0"),
         ("20260521140000_PreResponsaveisModule",                    "10.0.0"),
+        ("20260622120000_MetricaAulaPlanejamentoModule",            "10.0.0"),
     ];
 
     foreach (var (id, version) in migracoesPrevias)

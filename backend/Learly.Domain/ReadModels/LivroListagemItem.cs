@@ -5,4 +5,4 @@ public sealed record LivroListagemItem(
     string Nome,
     string Status,
     int QuantidadeCapitulos,
-    int TotalAulasPrevistas);
+    int TotalDuracaoMinutos);

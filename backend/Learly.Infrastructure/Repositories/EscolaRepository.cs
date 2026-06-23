@@ -47,4 +47,7 @@ internal sealed class EscolaRepository(LearlyDbContext db) : RepositoryBase<Esco
             .Select(e => (int?)e.Id)
             .FirstOrDefaultAsync(cancellationToken);
     }
+
+    public Task<Escola?> ObterRastreadaPorIdAsync(int id, CancellationToken cancellationToken = default)
+        => Db.Escolas.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 }

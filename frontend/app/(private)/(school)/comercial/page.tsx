@@ -144,9 +144,8 @@ const emptyPayload: CriarPreAlunoPayload = {
 };
 
 function escolherTemplateContratoPadrao(templates: ContratoTemplate[]): number | "" {
-  if (templates.length === 0) return "";
   const ativo = templates.find((t) => t.ativo);
-  return ativo?.id ?? templates[0].id;
+  return ativo?.id ?? "";
 }
 
 function serializarModalPreAlunoEstado(p: {
@@ -505,7 +504,7 @@ export default function ComercialPage() {
       if (modoModal === "editar" && editandoId !== null) {
         await editarPreAluno(editandoId, payload);
       } else {
-        await criarPreAluno(payload);
+      await criarPreAluno(payload);
       }
       fecharModalNovo();
       await carregar();
@@ -751,9 +750,9 @@ export default function ComercialPage() {
                         ? "success"
                         : devolvidoSecretaria
                           ? "danger"
-                          : row.status === "Em negociacao"
-                            ? "warning"
-                            : "info";
+                        : row.status === "Em negociacao"
+                          ? "warning"
+                          : "info";
                   return (
                     <Fragment key={row.id}>
                     <tr className={`border-b border-zinc-100 hover:bg-zinc-50/80 ${devolvidoSecretaria ? "bg-red-50/40" : ""}`}>
@@ -793,14 +792,14 @@ export default function ComercialPage() {
                               >
                                 Editar
                               </Button>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                className="h-8 px-3 text-xs"
-                                onClick={() => void onSubmeter(row)}
-                              >
-                                Enviar p/ secretaria
-                              </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="h-8 px-3 text-xs"
+                              onClick={() => void onSubmeter(row)}
+                            >
+                              Enviar p/ secretaria
+                            </Button>
                             </>
                           )}
                           {row.status !== "Matriculado" && row.status !== "Cancelado" && podeCancelar && (
@@ -927,14 +926,14 @@ export default function ComercialPage() {
                         ) : (
                           i + 1
                         )}
-                      </span>
+            </span>
                       <span
                         className={`hidden text-sm font-medium sm:inline ${
                           ativo ? "text-zinc-900" : "text-zinc-500"
                         }`}
                       >
                         {step.short}
-                      </span>
+            </span>
                     </button>
                     {i < STEPS_PRE_ALUNO.length - 1 && (
                       <span
@@ -950,7 +949,7 @@ export default function ComercialPage() {
             </ol>
           </nav>
 
-            {passoCadastro === "aluno" && (
+          {passoCadastro === "aluno" && (
               <div className="space-y-5">
                 <header>
                   <h3 className="text-base font-semibold text-zinc-900">Dados do pré-aluno</h3>
@@ -959,39 +958,39 @@ export default function ComercialPage() {
                   </p>
                 </header>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Input
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
                     label="Nome *"
                     value={formNovo.nome}
                     onChange={(e) => setFormNovo((p) => ({ ...p, nome: e.target.value }))}
                   />
                   <Input
                     label="Sobrenome *"
-                    value={formNovo.sobrenome}
-                    onChange={(e) => setFormNovo((p) => ({ ...p, sobrenome: e.target.value }))}
-                  />
-                  <Input
+                  value={formNovo.sobrenome}
+                  onChange={(e) => setFormNovo((p) => ({ ...p, sobrenome: e.target.value }))}
+                />
+                <Input
                     label="Data de nascimento *"
-                    type="date"
-                    value={formNovo.dataNascimento}
-                    onChange={(e) => setFormNovo((p) => ({ ...p, dataNascimento: e.target.value }))}
-                  />
-                  <Input
+                  type="date"
+                  value={formNovo.dataNascimento}
+                  onChange={(e) => setFormNovo((p) => ({ ...p, dataNascimento: e.target.value }))}
+                />
+                <Input
                     label={maiorOu18 ? "Celular *" : "Celular (opcional)"}
                     helperText={
                       maiorOu18
                         ? "Obrigatório se for o próprio responsável financeiro."
                         : undefined
                     }
-                    inputMode="numeric"
-                    value={applyBrazilMask("phone", formNovo.telefoneAluno ?? "")}
-                    onChange={(e) =>
-                      setFormNovo((p) => ({
-                        ...p,
-                        telefoneAluno: digitsOnly(e.target.value, 11),
-                      }))
-                    }
-                  />
+                  inputMode="numeric"
+                  value={applyBrazilMask("phone", formNovo.telefoneAluno ?? "")}
+                  onChange={(e) =>
+                    setFormNovo((p) => ({
+                      ...p,
+                      telefoneAluno: digitsOnly(e.target.value, 11),
+                    }))
+                  }
+                />
                 </div>
 
                 {/* Card idade */}
@@ -1070,22 +1069,22 @@ export default function ComercialPage() {
                   </select>
                 </div>
               </div>
-            )}
+          )}
 
-            {passoCadastro === "responsavel" && (
+          {passoCadastro === "responsavel" && (
               <div className="space-y-5">
                 <header>
                   <h3 className="text-base font-semibold text-zinc-900">Responsável financeiro</h3>
                   <p className="mt-0.5 text-sm text-zinc-500">
-                    {menorDeIdade
+                {menorDeIdade
                       ? "Pré-aluno menor de idade — cadastre pai, mãe ou tutor."
                       : `Pré-aluno tem ${idadePreAluno} anos. Quem assina e financia o contrato?`}
-                  </p>
+              </p>
                 </header>
 
                 {/* Seletor segmentado (só maiores) */}
                 {maiorOu18 && (
-                  <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
                     {[
                       {
                         id: "proprio" as const,
@@ -1102,9 +1101,9 @@ export default function ComercialPage() {
                     ].map((opt) => {
                       const sel = tipoResponsavelAdulto === opt.id;
                       return (
-                        <button
+                  <button
                           key={opt.id}
-                          type="button"
+                    type="button"
                           onClick={opt.action}
                           className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition ${
                             sel
@@ -1122,22 +1121,22 @@ export default function ComercialPage() {
                           <span className="flex flex-col">
                             <span className="text-sm font-semibold text-zinc-900">{opt.titulo}</span>
                             <span className="mt-0.5 text-xs text-zinc-500">{opt.desc}</span>
-                          </span>
-                        </button>
+                    </span>
+                  </button>
                       );
                     })}
-                  </div>
-                )}
+                </div>
+              )}
 
                 {/* Formulário: próprio pré-aluno */}
-                {!menorDeIdade && tipoResponsavelAdulto === "proprio" && (
+              {!menorDeIdade && tipoResponsavelAdulto === "proprio" && (
                   <section className={SECTION_CARD}>
                     <div className={SECTION_HEAD}>
                       <h4 className="text-sm font-semibold text-zinc-800">Dados do próprio responsável</h4>
                       <p className="mt-0.5 text-xs text-zinc-500">
                         Usaremos o nome e celular informados na etapa anterior; só falta o CPF.
                       </p>
-                    </div>
+                </div>
                     <div className="grid gap-4 p-4 sm:grid-cols-2">
                       <Input
                         label="CPF do pré-aluno *"
@@ -1160,7 +1159,7 @@ export default function ComercialPage() {
                 )}
 
                 {/* Formulário: menor de idade OU outro responsável */}
-                {(menorDeIdade || tipoResponsavelAdulto === "outro") && (
+              {(menorDeIdade || tipoResponsavelAdulto === "outro") && (
                   <>
                     <section className={SECTION_CARD}>
                       <div className={SECTION_HEAD}>
@@ -1172,59 +1171,59 @@ export default function ComercialPage() {
                         </p>
                       </div>
                       <div className="grid gap-4 p-4 sm:grid-cols-2">
-                        <div>
+                  <div>
                           <label className="mb-1 block text-sm font-medium text-zinc-700">Tipo *</label>
-                          <select
-                            value={formNovo.responsavelTipoPessoa}
+                    <select
+                      value={formNovo.responsavelTipoPessoa}
                             onChange={(e) =>
                               setFormNovo((p) => ({ ...p, responsavelTipoPessoa: e.target.value }))}
-                            className={SELECT_FIELD}
-                          >
-                            <option value="Fisica">Pessoa física</option>
-                            <option value="Juridica">Pessoa jurídica</option>
-                          </select>
-                        </div>
-                        <Input
+                      className={SELECT_FIELD}
+                    >
+                      <option value="Fisica">Pessoa física</option>
+                      <option value="Juridica">Pessoa jurídica</option>
+                    </select>
+                  </div>
+                  <Input
                           label={`${formNovo.responsavelTipoPessoa === "Fisica" ? "CPF" : "CNPJ"} *`}
-                          inputMode="numeric"
-                          value={
-                            formNovo.responsavelTipoPessoa === "Fisica"
-                              ? applyBrazilMask("cpf", formNovo.responsavelCpfCnpj)
-                              : applyBrazilMask("cnpj", formNovo.responsavelCpfCnpj)
-                          }
-                          onChange={(e) =>
-                            setFormNovo((p) => ({
-                              ...p,
-                              responsavelCpfCnpj: digitsOnly(
-                                e.target.value,
-                                formNovo.responsavelTipoPessoa === "Fisica" ? 11 : 14,
-                              ),
-                            }))}
-                        />
-                        <Input
+                    inputMode="numeric"
+                    value={
+                      formNovo.responsavelTipoPessoa === "Fisica"
+                        ? applyBrazilMask("cpf", formNovo.responsavelCpfCnpj)
+                        : applyBrazilMask("cnpj", formNovo.responsavelCpfCnpj)
+                    }
+                    onChange={(e) =>
+                      setFormNovo((p) => ({
+                        ...p,
+                        responsavelCpfCnpj: digitsOnly(
+                          e.target.value,
+                          formNovo.responsavelTipoPessoa === "Fisica" ? 11 : 14,
+                        ),
+                      }))}
+                  />
+                  <Input
                           label="Nome *"
-                          value={formNovo.responsavelNome}
+                    value={formNovo.responsavelNome}
                           onChange={(e) =>
                             setFormNovo((p) => ({ ...p, responsavelNome: e.target.value }))}
-                        />
-                        <Input
+                  />
+                  <Input
                           label="Sobrenome *"
-                          value={formNovo.responsavelSobrenome}
+                    value={formNovo.responsavelSobrenome}
                           onChange={(e) =>
                             setFormNovo((p) => ({ ...p, responsavelSobrenome: e.target.value }))}
-                        />
-                        <Input
+                  />
+                  <Input
                           label="Telefone / WhatsApp *"
-                          inputMode="numeric"
+                    inputMode="numeric"
                           className="sm:col-span-2"
-                          value={applyBrazilMask("phone", formNovo.responsavelTelefone)}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({
-                              ...p,
-                              responsavelTelefone: digitsOnly(e.target.value, 11),
-                            }))}
-                        />
-                      </div>
+                    value={applyBrazilMask("phone", formNovo.responsavelTelefone)}
+                    onChange={(e) =>
+                      setFormNovo((p) => ({
+                        ...p,
+                        responsavelTelefone: digitsOnly(e.target.value, 11),
+                      }))}
+                  />
+                </div>
                     </section>
 
                     {/* Opcionais colapsável */}
@@ -1316,15 +1315,15 @@ export default function ComercialPage() {
                               <option value="Nao Declarado">Não declarado</option>
                             </select>
                           </div>
-                          <Input
+                  <Input
                             label="Nacionalidade"
                             value={formNovo.responsavelNacionalidade ?? ""}
-                            onChange={(e) =>
-                              setFormNovo((p) => ({
-                                ...p,
+                    onChange={(e) =>
+                      setFormNovo((p) => ({
+                        ...p,
                                 responsavelNacionalidade: e.target.value,
-                              }))}
-                          />
+                      }))}
+                  />
                           <Input
                             label="Data de nascimento"
                             type="date"
@@ -1373,7 +1372,7 @@ export default function ComercialPage() {
                             onChange={(e) =>
                               setFormNovo((p) => ({ ...p, responsavelRgOrgao: e.target.value }))}
                           />
-                        </div>
+                </div>
                       )}
                     </section>
                   </>
@@ -1385,10 +1384,10 @@ export default function ComercialPage() {
                     Escolha uma das opções acima para continuar.
                   </p>
                 )}
-              </div>
-            )}
+                </div>
+          )}
 
-            {passoCadastro === "comercial" && (
+          {passoCadastro === "comercial" && (
               <div className="space-y-5">
                 <header>
                   <h3 className="text-base font-semibold text-zinc-900">Contrato e valores</h3>
@@ -1418,41 +1417,39 @@ export default function ComercialPage() {
                     </p>
                   </div>
                   <div className="p-4">
-                    {contratoTemplates.length === 0 ? (
+                  {contratoTemplates.length === 0 ? (
                       <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                         Nenhum modelo cadastrado. Crie em{" "}
-                        <a href="/contratos" className="font-medium underline">
-                          Contratos
-                        </a>{" "}
+                      <a href="/contratos" className="font-medium underline">
+                        Contratos
+                      </a>{" "}
                         antes de salvar.
-                      </p>
-                    ) : (
-                      <>
-                        <select
-                          id="template-contrato-pre"
-                          value={templateContratoId === "" ? "" : String(templateContratoId)}
-                          onChange={(e) =>
-                            setTemplateContratoId(e.target.value ? Number(e.target.value) : "")}
-                          className={SELECT_FIELD}
-                        >
+                    </p>
+                  ) : (
+                    <>
+                      <select
+                        id="template-contrato-pre"
+                        value={templateContratoId === "" ? "" : String(templateContratoId)}
+                        onChange={(e) =>
+                          setTemplateContratoId(e.target.value ? Number(e.target.value) : "")}
+                        className={SELECT_FIELD}
+                      >
                           <option value="">Escolha um modelo…</option>
-                          {contratoTemplates.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.nome}
-                              {t.ativo ? " · ativo" : ""}
-                              {` · v${t.versao}`}
-                            </option>
-                          ))}
-                        </select>
+                        {contratoTemplates.filter((t) => t.ativo).map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nome}{` · v${t.versao}`}
+                          </option>
+                        ))}
+                      </select>
                         {tipoContratoResolvido && (
                           <p className="mt-2 text-xs text-zinc-500">
                             Será salvo como:{" "}
                             <span className="font-medium text-zinc-700">{tipoContratoResolvido}</span>
                           </p>
                         )}
-                      </>
-                    )}
-                  </div>
+                    </>
+                  )}
+                </div>
                 </section>
 
                 {/* Valores */}
@@ -1467,109 +1464,109 @@ export default function ComercialPage() {
                     <div>
                       <p className={SUBSECTION_LABEL}>Mensalidade</p>
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <Input
+                <Input
                           label="Valor (R$) *"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={formNovo.valorMensalidade || ""}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({
-                              ...p,
-                              valorMensalidade: Number(e.target.value.replace(",", ".")) || 0,
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formNovo.valorMensalidade || ""}
+                  onChange={(e) =>
+                    setFormNovo((p) => ({
+                      ...p,
+                      valorMensalidade: Number(e.target.value.replace(",", ".")) || 0,
                             }))}
-                        />
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-zinc-700">
+                />
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700">
                             Forma de pagamento{" "}
-                            <span className="font-normal text-zinc-500">(opcional)</span>
-                          </label>
-                          <select
-                            value={formNovo.formaPagamento ?? ""}
-                            onChange={(e) =>
+                    <span className="font-normal text-zinc-500">(opcional)</span>
+                  </label>
+                  <select
+                    value={formNovo.formaPagamento ?? ""}
+                    onChange={(e) =>
                               setFormNovo((p) => ({ ...p, formaPagamento: e.target.value }))}
-                            className={SELECT_FIELD}
-                          >
+                    className={SELECT_FIELD}
+                  >
                             <option value="">Não informar</option>
-                            {FORMAS_PAGAMENTO_OPCOES.map((f) => (
-                              <option key={f} value={f}>
-                                {f}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                    {FORMAS_PAGAMENTO_OPCOES.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                       </div>
                     </div>
 
                     <div className="border-t border-zinc-100 pt-4">
                       <p className={SUBSECTION_LABEL}>Material / livro</p>
-                      <Input
+                <Input
                         label="Valor cobrado (R$)"
                         helperText="Use 0 se for gratuito ou não houver cobrança."
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={formNovo.valorMaterial ?? ""}
-                        onChange={(e) =>
-                          setFormNovo((p) => ({
-                            ...p,
-                            valorMaterial:
-                              e.target.value === ""
-                                ? 0
-                                : Math.max(0, Number(e.target.value.replace(",", "."))),
-                          }))}
-                      />
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formNovo.valorMaterial ?? ""}
+                  onChange={(e) =>
+                    setFormNovo((p) => ({
+                      ...p,
+                      valorMaterial:
+                        e.target.value === ""
+                          ? 0
+                          : Math.max(0, Number(e.target.value.replace(",", "."))),
+                    }))}
+                />
                     </div>
 
                     <div className="border-t border-zinc-100 pt-4">
                       <p className={SUBSECTION_LABEL}>Matrícula</p>
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <Input
+                <Input
                           label="Valor (R$)"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={formNovo.valorMatricula ?? ""}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({
-                              ...p,
-                              valorMatricula:
-                                e.target.value === ""
-                                  ? 0
-                                  : Math.max(0, Number(e.target.value.replace(",", "."))),
-                            }))}
-                        />
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-zinc-700">
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formNovo.valorMatricula ?? ""}
+                  onChange={(e) =>
+                    setFormNovo((p) => ({
+                      ...p,
+                      valorMatricula:
+                        e.target.value === ""
+                          ? 0
+                          : Math.max(0, Number(e.target.value.replace(",", "."))),
+                    }))}
+                />
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700">
                             Forma de pagamento
                             {Number(formNovo.valorMatricula) > 0 && (
-                              <span className="text-red-600"> *</span>
+                      <span className="text-red-600"> *</span>
                             )}
-                          </label>
-                          <select
-                            value={formNovo.formaPagamentoMatricula ?? ""}
-                            onChange={(e) =>
-                              setFormNovo((p) => ({
-                                ...p,
-                                formaPagamentoMatricula: e.target.value,
-                              }))}
-                            disabled={!(Number(formNovo.valorMatricula) > 0)}
-                            className={SELECT_FIELD}
-                          >
+                  </label>
+                  <select
+                    value={formNovo.formaPagamentoMatricula ?? ""}
+                    onChange={(e) =>
+                      setFormNovo((p) => ({
+                        ...p,
+                        formaPagamentoMatricula: e.target.value,
+                      }))}
+                    disabled={!(Number(formNovo.valorMatricula) > 0)}
+                    className={SELECT_FIELD}
+                  >
                             <option value="">
                               {Number(formNovo.valorMatricula) > 0
                                 ? "Selecione a forma de pagamento"
                                 : "Só necessário se houver valor"}
                             </option>
-                            {FORMAS_PAGAMENTO_OPCOES.map((f) => (
-                              <option key={f} value={f}>
-                                {f}
-                              </option>
-                            ))}
-                          </select>
+                    {FORMAS_PAGAMENTO_OPCOES.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
                         </div>
-                      </div>
-                    </div>
+                </div>
+              </div>
 
                     {(formNovo.valorMensalidade > 0
                       || (formNovo.valorMaterial ?? 0) > 0
@@ -1602,20 +1599,20 @@ export default function ComercialPage() {
                     </p>
                   </div>
                   <div className="p-4">
-                    <select
-                      value={formNovo.origemCaptacao}
-                      onChange={(e) =>
+                  <select
+                    value={formNovo.origemCaptacao}
+                    onChange={(e) =>
                         setFormNovo((p) => ({ ...p, origemCaptacao: e.target.value }))}
-                      className={SELECT_FIELD}
-                    >
+                    className={SELECT_FIELD}
+                  >
                       <option value="">Selecione a origem…</option>
-                      {ORIGEM_CAPTACAO_OPCOES.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    {ORIGEM_CAPTACAO_OPCOES.map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 </section>
 
                 {/* Transporte */}
@@ -1641,22 +1638,22 @@ export default function ComercialPage() {
                             type="button"
                             onClick={() => {
                               const sim = opt.id === "sim";
-                              setFormNovo((p) => ({
-                                ...p,
-                                usaTransporteVan: sim,
-                                ...(sim
-                                  ? {}
-                                  : {
-                                      transporteCep: "",
-                                      transporteLogradouro: "",
-                                      transporteNumero: "",
-                                      transporteComplemento: "",
-                                      transporteBairro: "",
-                                      transporteCidade: "",
-                                      transporteUf: "",
-                                    }),
-                              }));
-                            }}
+                      setFormNovo((p) => ({
+                        ...p,
+                        usaTransporteVan: sim,
+                        ...(sim
+                          ? {}
+                          : {
+                              transporteCep: "",
+                              transporteLogradouro: "",
+                              transporteNumero: "",
+                              transporteComplemento: "",
+                              transporteBairro: "",
+                              transporteCidade: "",
+                              transporteUf: "",
+                            }),
+                      }));
+                    }}
                             className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
                               sel
                                 ? "border-[#1F2A35] bg-[#1F2A35] text-white"
@@ -1667,80 +1664,80 @@ export default function ComercialPage() {
                           </button>
                         );
                       })}
-                    </div>
+                </div>
 
                     {formNovo.usaTransporteVan && (
                       <div className="grid gap-4 border-t border-zinc-100 pt-4 sm:grid-cols-2">
-                        <div className="flex flex-col gap-2 sm:col-span-2">
+                    <div className="flex flex-col gap-2 sm:col-span-2">
                           <label className="text-sm font-medium text-zinc-700">CEP *</label>
-                          <div className="flex flex-wrap gap-2">
-                            <input
+                      <div className="flex flex-wrap gap-2">
+                        <input
                               className={SELECT_FIELD.replace(" w-full ", " min-w-[140px] flex-1 ")}
-                              inputMode="numeric"
-                              placeholder="00000-000"
-                              value={applyBrazilMask("cep", formNovo.transporteCep ?? "")}
-                              onChange={(e) =>
-                                setFormNovo((p) => ({
-                                  ...p,
-                                  transporteCep: digitsOnly(e.target.value, 8),
-                                }))}
-                            />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              onClick={() => void buscarCepTransporteVan()}
+                          inputMode="numeric"
+                          placeholder="00000-000"
+                          value={applyBrazilMask("cep", formNovo.transporteCep ?? "")}
+                          onChange={(e) =>
+                            setFormNovo((p) => ({
+                              ...p,
+                              transporteCep: digitsOnly(e.target.value, 8),
+                            }))}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => void buscarCepTransporteVan()}
                               disabled={
                                 digitsOnly(formNovo.transporteCep ?? "").length !== 8
                                 || cepVanBuscando
                               }
-                              isLoading={cepVanBuscando}
-                            >
-                              Buscar CEP
-                            </Button>
-                          </div>
-                        </div>
-                        <Input
-                          label="Logradouro *"
-                          value={formNovo.transporteLogradouro ?? ""}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({ ...p, transporteLogradouro: e.target.value }))}
-                        />
-                        <Input
-                          label="Número *"
-                          value={formNovo.transporteNumero ?? ""}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({ ...p, transporteNumero: e.target.value }))}
-                        />
-                        <Input
-                          label="Complemento"
-                          value={formNovo.transporteComplemento ?? ""}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({ ...p, transporteComplemento: e.target.value }))}
-                        />
-                        <Input
-                          label="Bairro *"
-                          value={formNovo.transporteBairro ?? ""}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({ ...p, transporteBairro: e.target.value }))}
-                        />
-                        <Input
-                          label="Cidade *"
-                          value={formNovo.transporteCidade ?? ""}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({ ...p, transporteCidade: e.target.value }))}
-                        />
-                        <Input
-                          label="UF *"
-                          inputMode="text"
-                          maxLength={2}
-                          value={(formNovo.transporteUf ?? "").slice(0, 2)}
-                          onChange={(e) =>
-                            setFormNovo((p) => ({
-                              ...p,
-                              transporteUf: e.target.value.toUpperCase(),
-                            }))}
-                        />
+                          isLoading={cepVanBuscando}
+                        >
+                          Buscar CEP
+                        </Button>
                       </div>
+                    </div>
+                    <Input
+                      label="Logradouro *"
+                      value={formNovo.transporteLogradouro ?? ""}
+                      onChange={(e) =>
+                        setFormNovo((p) => ({ ...p, transporteLogradouro: e.target.value }))}
+                    />
+                    <Input
+                      label="Número *"
+                      value={formNovo.transporteNumero ?? ""}
+                      onChange={(e) =>
+                        setFormNovo((p) => ({ ...p, transporteNumero: e.target.value }))}
+                    />
+                    <Input
+                      label="Complemento"
+                      value={formNovo.transporteComplemento ?? ""}
+                      onChange={(e) =>
+                        setFormNovo((p) => ({ ...p, transporteComplemento: e.target.value }))}
+                    />
+                    <Input
+                      label="Bairro *"
+                      value={formNovo.transporteBairro ?? ""}
+                      onChange={(e) =>
+                        setFormNovo((p) => ({ ...p, transporteBairro: e.target.value }))}
+                    />
+                    <Input
+                      label="Cidade *"
+                      value={formNovo.transporteCidade ?? ""}
+                      onChange={(e) =>
+                        setFormNovo((p) => ({ ...p, transporteCidade: e.target.value }))}
+                    />
+                    <Input
+                          label="UF *"
+                      inputMode="text"
+                      maxLength={2}
+                      value={(formNovo.transporteUf ?? "").slice(0, 2)}
+                      onChange={(e) =>
+                        setFormNovo((p) => ({
+                          ...p,
+                          transporteUf: e.target.value.toUpperCase(),
+                        }))}
+                    />
+              </div>
                     )}
                   </div>
                 </section>
@@ -1754,18 +1751,18 @@ export default function ComercialPage() {
                     </p>
                   </div>
                   <div className="p-4">
-                    <textarea
-                      value={formNovo.observacoesComerciais ?? ""}
-                      onChange={(e) =>
-                        setFormNovo((p) => ({
-                          ...p,
-                          observacoesComerciais: e.target.value,
-                        }))}
-                      rows={3}
-                      className="w-full resize-none rounded-lg border border-zinc-300 bg-white p-3 text-sm text-zinc-900 outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/15"
+                <textarea
+                  value={formNovo.observacoesComerciais ?? ""}
+                  onChange={(e) =>
+                    setFormNovo((p) => ({
+                      ...p,
+                      observacoesComerciais: e.target.value,
+                    }))}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-zinc-300 bg-white p-3 text-sm text-zinc-900 outline-none focus:border-[#1F2A35] focus:ring-2 focus:ring-[#1F2A35]/15"
                       placeholder='Ex.: desconto combinado, indicação de quem indicou em "Outro", horário preferencial…'
-                    />
-                  </div>
+                />
+              </div>
                 </section>
               </div>
             )}
@@ -1785,12 +1782,12 @@ export default function ComercialPage() {
           <>
             <Button type="button" variant="secondary" onClick={requestClose} disabled={submetendo}>
               Cancelar
-            </Button>
+                </Button>
             <Button type="button" onClick={() => void confirmarSubmissao()} isLoading={submetendo}>
               Enviar para secretaria
-            </Button>
-          </>
-        )}
+                  </Button>
+            </>
+          )}
       >
         {preAlunoSubmeter && (
           <div className="space-y-4 text-zinc-900">
@@ -1798,7 +1795,7 @@ export default function ComercialPage() {
               Anexe os documentos disponíveis (opcional) e confirme o envio para análise da secretaria.
             </p>
             <PreAlunoDocumentosUpload preAlunoId={preAlunoSubmeter.id} disabled={submetendo} />
-          </div>
+        </div>
         )}
       </Modal>
     </div>

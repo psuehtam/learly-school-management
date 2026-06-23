@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/configuracoes";
 import { listarLivrosEscola, type LivroEscolaDto } from "@/lib/api/livros";
 import { listarUsuariosMinhaEscola, type UsuarioMinhaEscola } from "@/lib/api/usuarios";
+import { obterConfiguracoesEscolaConsultaTurmas } from "@/lib/api/minha-escola";
 import { getApiErrorMessage } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { hasPermission } from "@/lib/permissions";
@@ -620,6 +621,7 @@ export default function PainelTurmaAdminPage() {
   const [modalVincularAberto, setModalVincularAberto] = useState(false);
   const [modalEditarTurmaAberto, setModalEditarTurmaAberto] = useState(false);
   const [concluindoTurma, setConcluindoTurma] = useState(false);
+  const [minAlunosTurma, setMinAlunosTurma] = useState(3);
 
   const podeConcluirTurma = !!user && hasPermission(user, "CONCLUIR_TURMA");
   const exibirConcluirTurma =
@@ -681,6 +683,9 @@ export default function PainelTurmaAdminPage() {
     void listarHorariosFuncionamentoConsultaTurmas()
       .then(setHorariosFuncionamento)
       .catch(() => setHorariosFuncionamento([]));
+    void obterConfiguracoesEscolaConsultaTurmas()
+      .then((cfg) => setMinAlunosTurma(cfg.minAlunosTurma))
+      .catch(() => setMinAlunosTurma(3));
   }, [podeGerenciarTurma]);
 
   const alunosIds = useMemo(() => new Set(alunos.map((a) => a.id)), [alunos]);
@@ -792,9 +797,15 @@ export default function PainelTurmaAdminPage() {
         </div>
 
         {turmaView.statusApi === "Em Espera" && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <strong>{alunos.length}</strong> aluno(s) matriculado(s). São necessários <strong>3</strong> para ativar a
-            turma na listagem.
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              alunos.length >= minAlunosTurma
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            <strong>{alunos.length}</strong> aluno(s) matriculado(s). São necessários{" "}
+            <strong>{minAlunosTurma}</strong> para ativar a turma na listagem.
           </div>
         )}
 

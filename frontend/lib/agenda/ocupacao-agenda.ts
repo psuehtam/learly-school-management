@@ -1,5 +1,6 @@
 import type { Aula } from "@/types/aula";
 import type { Compromisso } from "@/lib/api/compromissos";
+import { formatarDataIsoPtBr } from "@/lib/dates";
 
 /** Altura mínima (px) do bloco na grade para compromissos/aulas muito curtos continuarem legíveis. */
 export const AGENDA_ALTURA_MINIMA_CARD_OCUPACAO_PX = 72;

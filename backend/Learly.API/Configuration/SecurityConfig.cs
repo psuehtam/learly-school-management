@@ -125,7 +125,6 @@ public static class SecurityConfig
                 "INATIVAR_TEMPLATE_CONTRATO",
 
                 // Alunos
-                "CRIAR_ALUNO",
                 "VISUALIZAR_ALUNO",
                 "EDITAR_ALUNO",
                 "INATIVAR_ALUNO",
@@ -188,6 +187,7 @@ public static class SecurityConfig
                 "INATIVAR_CAPITULO",
                 "MARCAR_CAPITULO_CONCLUIDO",
                 "VISUALIZAR_PROGRESSO_CAPITULO",
+                "PLANEJAR_LIVRO",
 
                 // Calendário
                 "GERENCIAR_CALENDARIO",

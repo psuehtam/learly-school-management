@@ -2,6 +2,7 @@ using Learly.Application.Contracts.Matriculas;
 using Learly.Application.Contracts.Matriculas.Requests;
 using Learly.Application.Contracts.Matriculas.Responses;
 using Learly.Application.Services.Common;
+using Learly.Application.Services.Escolas;
 using Learly.Domain.Entities;
 using Learly.Domain.Interfaces.Persistence;
 using Learly.Domain.Interfaces.Repositories;
@@ -65,8 +66,15 @@ public sealed class MatriculasService : IMatriculasService
             return new MatriculaListagemResultado(false, [], "Informe a turma.", MatriculaListagemFalha.Validacao);
         }
 
+        IReadOnlyList<string>? statusesIn = null;
         string? statusNormalizado = null;
-        if (!string.IsNullOrWhiteSpace(filtro.Status))
+
+        var grupoNormalizado = filtro.Grupo?.Trim().ToLowerInvariant();
+        if (grupoNormalizado == Matricula.Grupos.Inativos)
+        {
+            statusesIn = Matricula.Grupos.StatusInativos;
+        }
+        else if (!string.IsNullOrWhiteSpace(filtro.Status))
         {
             if (!Matricula.Estados.IsValid(filtro.Status))
             {
@@ -104,6 +112,7 @@ public sealed class MatriculasService : IMatriculasService
             statusNormalizado,
             filtro.AlunoId,
             filtro.TurmaId,
+            statusesIn,
             cancellationToken);
 
         // Mapeamento explicito (Mapster com record + init-only pode omitir AlunoNomeCompleto na serializacao).
@@ -328,31 +337,30 @@ public sealed class MatriculasService : IMatriculasService
             return new MatriculaOperacaoResultado(false, "Turma nao encontrada nesta escola.", 400);
         }
 
-        if (!string.Equals(matricula.Status, Matricula.Estados.EmEspera, StringComparison.OrdinalIgnoreCase)
-            || matricula.TurmaId.HasValue)
-        {
-            return new MatriculaOperacaoResultado(false, "Somente matriculas em espera sem turma podem ser enturmadas.", 409);
-        }
-
-        var existeDuplicidade = await _matriculas.ExisteDuplicidadeAsync(
+        var validacaoEnturmacao = await MatriculaEnturmacaoRules.ValidarVinculoAsync(
+            _matriculas,
             escolaId.Value,
-            matricula.AlunoId,
+            matricula,
             request.TurmaId,
             cancellationToken);
-
-        if (existeDuplicidade)
+        if (!validacaoEnturmacao.Ok)
         {
-            return new MatriculaOperacaoResultado(false, "Aluno ja possui matricula nessa turma.", 409);
+            return new MatriculaOperacaoResultado(
+                false,
+                validacaoEnturmacao.Mensagem,
+                validacaoEnturmacao.StatusCode);
         }
 
-        var msgTurmaUnica = await ValidarUnicaTurmaAtivaAsync(
+        var validacaoCapacidade = await EscolaTurmaCapacidadeRules.ValidarVinculoAsync(
+            _escolas,
+            _turmas,
             escolaId.Value,
-            matricula.AlunoId,
-            ignorarMatriculaId: matriculaId,
+            request.TurmaId,
+            1,
             cancellationToken);
-        if (msgTurmaUnica is not null)
+        if (!validacaoCapacidade.Ok)
         {
-            return new MatriculaOperacaoResultado(false, msgTurmaUnica, 409);
+            return new MatriculaOperacaoResultado(false, validacaoCapacidade.Mensagem, 409);
         }
 
         matricula.TurmaId = request.TurmaId;

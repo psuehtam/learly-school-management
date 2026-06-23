@@ -23,6 +23,22 @@ internal sealed class MatriculaRepository(LearlyDbContext db) : RepositoryBase<M
             .FirstOrDefaultAsync(m => m.Id == matriculaId && m.EscolaId == escolaId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Matricula>> ListarRastreadasPorIdsEEscolaAsync(
+        int escolaId,
+        IEnumerable<int> matriculaIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = matriculaIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        return await Db.Matriculas
+            .Where(m => m.EscolaId == escolaId && ids.Contains(m.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<bool> ExisteAlunoNaEscolaAsync(int alunoId, int escolaId, CancellationToken cancellationToken = default)
     {
         const string sql = "SELECT COUNT(1) FROM alunos WHERE id = @alunoId AND escola_id = @escolaId";
@@ -129,13 +145,19 @@ internal sealed class MatriculaRepository(LearlyDbContext db) : RepositoryBase<M
         string? status,
         int? alunoId,
         int? turmaId,
+        IReadOnlyList<string>? statusesIn = null,
         CancellationToken cancellationToken = default)
     {
         var matriculas = Db.Matriculas
             .AsNoTracking()
             .Where(m => m.EscolaId == escolaId);
 
-        if (!string.IsNullOrWhiteSpace(status))
+        if (statusesIn is { Count: > 0 })
+        {
+            var lista = statusesIn.ToList();
+            matriculas = matriculas.Where(m => lista.Contains(m.Status));
+        }
+        else if (!string.IsNullOrWhiteSpace(status))
         {
             matriculas = matriculas.Where(m => m.Status == status);
         }

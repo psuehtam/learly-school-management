@@ -7,6 +7,13 @@ namespace Learly.Domain.Entities;
 /// </summary>
 public sealed class Matricula
 {
+    public static class Grupos
+    {
+        public const string Inativos = "inativos";
+        public static readonly IReadOnlyList<string> StatusInativos =
+            [Estados.Cancelado, Estados.Trancado, Estados.Concluido];
+    }
+
     public static class Estados
     {
         public const string EmEspera = "Em Espera";

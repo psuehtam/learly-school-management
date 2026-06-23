@@ -20,14 +20,26 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- para o superadmin global.
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS escolas (
-  id               INT          NOT NULL AUTO_INCREMENT,
-  codigo_escola    VARCHAR(50)  NOT NULL,
-  nome_fantasia    VARCHAR(150) NOT NULL,
-  razao_social     VARCHAR(150)          DEFAULT NULL,
-  cnpj             VARCHAR(20)           DEFAULT NULL,
-  status           ENUM('Ativo','Inativo') NOT NULL DEFAULT 'Ativo',
-  data_criacao     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  data_atualizacao DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id                    INT          NOT NULL AUTO_INCREMENT,
+  codigo_escola         VARCHAR(50)  NOT NULL,
+  nome_fantasia         VARCHAR(150) NOT NULL,
+  razao_social          VARCHAR(150)          DEFAULT NULL,
+  cnpj                  VARCHAR(20)           DEFAULT NULL,
+  min_alunos_turma      INT          NOT NULL DEFAULT 3,
+  max_alunos_turma      INT                   DEFAULT NULL,
+  metrica_aula          ENUM('POR_DIA','POR_HORA') NOT NULL DEFAULT 'POR_DIA',
+  duracao_aula_minutos  INT          NOT NULL DEFAULT 120,
+  cep                   VARCHAR(8)            DEFAULT NULL,
+  logradouro            VARCHAR(200)          DEFAULT NULL,
+  numero                VARCHAR(20)           DEFAULT NULL,
+  complemento           VARCHAR(100)          DEFAULT NULL,
+  bairro                VARCHAR(100)          DEFAULT NULL,
+  cidade                VARCHAR(100)          DEFAULT NULL,
+  uf                    CHAR(2)               DEFAULT NULL,
+  logo_caminho          VARCHAR(500)          DEFAULT NULL,
+  status                ENUM('Ativo','Inativo') NOT NULL DEFAULT 'Ativo',
+  data_criacao          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  data_atualizacao      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_codigo_escola (codigo_escola),
   UNIQUE KEY uk_cnpj         (cnpj)
@@ -245,22 +257,62 @@ CREATE TABLE IF NOT EXISTS livros (
 
 -- ------------------------------------------------------------
 -- capitulos
--- Capítulos de um livro com quantidade de aulas previstas.
+-- Capítulos de um livro com duração em minutos.
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS capitulos (
-  id                  INT          NOT NULL AUTO_INCREMENT,
-  escola_id           INT          NOT NULL,
-  livro_id            INT          NOT NULL,
-  nome                VARCHAR(100) NOT NULL,
-  qtd_aulas_previstas INT          NOT NULL,
-  status              ENUM('Ativo','Inativo') NOT NULL DEFAULT 'Ativo',
-  data_criacao        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  data_atualizacao    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id               INT          NOT NULL AUTO_INCREMENT,
+  escola_id        INT          NOT NULL,
+  livro_id         INT          NOT NULL,
+  nome             VARCHAR(100) NOT NULL,
+  duracao_minutos  INT          NOT NULL,
+  status           ENUM('Ativo','Inativo') NOT NULL DEFAULT 'Ativo',
+  data_criacao     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  data_atualizacao DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_capitulos_escola (escola_id),
   KEY idx_capitulos_livro  (livro_id),
   CONSTRAINT fk_capitulos_escola FOREIGN KEY (escola_id) REFERENCES escolas (id),
   CONSTRAINT fk_capitulos_livro  FOREIGN KEY (livro_id)  REFERENCES livros  (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- livros_planejamento_dias
+-- Um card de dia de aula para um livro (rascunho de planejamento).
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS livros_planejamento_dias (
+  id               INT      NOT NULL AUTO_INCREMENT,
+  escola_id        INT      NOT NULL,
+  livro_id         INT      NOT NULL,
+  ordem            INT      NOT NULL,
+  data_criacao     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  data_atualizacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_lpd_livro_ordem (livro_id, ordem),
+  KEY idx_lpd_escola (escola_id),
+  CONSTRAINT fk_lpd_escola FOREIGN KEY (escola_id) REFERENCES escolas (id),
+  CONSTRAINT fk_lpd_livro  FOREIGN KEY (livro_id)  REFERENCES livros  (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- livros_planejamento_alocacoes
+-- Pivô N:M entre dias de planejamento e capítulos (minutos alocados).
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS livros_planejamento_alocacoes (
+  id               INT      NOT NULL AUTO_INCREMENT,
+  escola_id        INT      NOT NULL,
+  dia_id           INT      NOT NULL,
+  capitulo_id      INT      NOT NULL,
+  minutos_alocados INT      NOT NULL,
+  ordem            INT      NOT NULL,
+  data_criacao     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  data_atualizacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_lpa_escola    (escola_id),
+  KEY idx_lpa_dia       (dia_id),
+  KEY idx_lpa_capitulo  (capitulo_id),
+  CONSTRAINT fk_lpa_escola   FOREIGN KEY (escola_id)   REFERENCES escolas                  (id),
+  CONSTRAINT fk_lpa_dia      FOREIGN KEY (dia_id)      REFERENCES livros_planejamento_dias  (id) ON DELETE CASCADE,
+  CONSTRAINT fk_lpa_capitulo FOREIGN KEY (capitulo_id) REFERENCES capitulos                (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -434,6 +486,28 @@ CREATE TABLE IF NOT EXISTS aulas (
   CONSTRAINT fk_aulas_turma     FOREIGN KEY (turma_id)     REFERENCES turmas    (id),
   CONSTRAINT fk_aulas_capitulo  FOREIGN KEY (capitulo_id)  REFERENCES capitulos (id),
   CONSTRAINT fk_aulas_professor FOREIGN KEY (professor_id) REFERENCES usuarios  (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- aulas_capitulos_alocacao
+-- Pivô N:M runtime entre aulas agendadas e capítulos (espelha o
+-- planejamento do livro no momento da ativação da turma).
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS aulas_capitulos_alocacao (
+  id               INT      NOT NULL AUTO_INCREMENT,
+  escola_id        INT      NOT NULL,
+  aula_id          INT      NOT NULL,
+  capitulo_id      INT      NOT NULL,
+  minutos_alocados INT      NOT NULL,
+  ordem            INT      NOT NULL,
+  data_criacao     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_aca_escola   (escola_id),
+  KEY idx_aca_aula     (aula_id),
+  KEY idx_aca_capitulo (capitulo_id),
+  CONSTRAINT fk_aca_escola   FOREIGN KEY (escola_id)   REFERENCES escolas   (id),
+  CONSTRAINT fk_aca_aula     FOREIGN KEY (aula_id)     REFERENCES aulas     (id) ON DELETE CASCADE,
+  CONSTRAINT fk_aca_capitulo FOREIGN KEY (capitulo_id) REFERENCES capitulos (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -1028,7 +1102,6 @@ INSERT INTO permissoes (nome, descricao) VALUES
 ('REMOVER_ANEXO_MATRICULA',         'Remover anexo da ficha de matricula ou pre-matricula'),
 -- Alunos
 ('VISUALIZAR_ALUNO',                'Ver perfil e dados do aluno'),
-('CRIAR_ALUNO',                     'Cadastrar novo aluno'),
 ('EDITAR_ALUNO',                    'Editar dados cadastrais do aluno'),
 ('INATIVAR_ALUNO',                  'Inativar aluno'),
 ('TRANCAR_ALUNO',                   'Trancar matricula do aluno'),
@@ -1103,10 +1176,11 @@ INSERT INTO permissoes (nome, descricao) VALUES
 -- Capítulos
 ('VISUALIZAR_CAPITULO',             'Ver capitulos de livros'),
 ('CRIAR_CAPITULO',                  'Criar capitulo em livro'),
-('EDITAR_CAPITULO',                 'Editar capitulo (nome, qtd aulas)'),
+('EDITAR_CAPITULO',                 'Editar capitulo (nome, duracao)'),
 ('INATIVAR_CAPITULO',               'Inativar capitulo'),
 ('VISUALIZAR_PROGRESSO_CAPITULO',   'Ver progresso de capitulos da turma'),
 ('MARCAR_CAPITULO_CONCLUIDO',       'Marcar capitulo como concluido na turma'),
+('PLANEJAR_LIVRO',                  'Acessar e salvar planejamento de dias do livro'),
 -- Calendário
 ('VISUALIZAR_CALENDARIO',           'Ver calendario geral'),
 ('GERENCIAR_CALENDARIO',            'Marcar feriados, recessos e eventos no calendario'),
@@ -1247,7 +1321,7 @@ JOIN permissoes p ON p.nome IN (
   'VISUALIZAR_MATRICULA','CRIAR_MATRICULA','EDITAR_MATRICULA','CANCELAR_MATRICULA',
   'APROVAR_MATRICULA','REPROVAR_MATRICULA','FINALIZAR_MATRICULA',
   'DEVOLVER_MATRICULA_COMERCIAL','REMOVER_ANEXO_MATRICULA',
-  'VISUALIZAR_ALUNO','CRIAR_ALUNO','EDITAR_ALUNO','INATIVAR_ALUNO','TRANCAR_ALUNO',
+  'VISUALIZAR_ALUNO','EDITAR_ALUNO','INATIVAR_ALUNO','TRANCAR_ALUNO',
   'VISUALIZAR_HISTORICO_ALUNO','ANEXAR_DOCUMENTO_ALUNO','JUSTIFICAR_FALTA_ALUNO',
   'VISUALIZAR_RESPONSAVEL','CRIAR_RESPONSAVEL','EDITAR_RESPONSAVEL',
   'CRIAR_FILIACAO','EDITAR_FILIACAO',
@@ -1301,7 +1375,7 @@ JOIN permissoes p ON p.nome IN (
   'VISUALIZAR_ALUNO','VISUALIZAR_HISTORICO_ALUNO',
   'VISUALIZAR_LIVRO','CRIAR_LIVRO','EDITAR_LIVRO','INATIVAR_LIVRO',
   'VISUALIZAR_CAPITULO','CRIAR_CAPITULO','EDITAR_CAPITULO','INATIVAR_CAPITULO',
-  'VISUALIZAR_PROGRESSO_CAPITULO','MARCAR_CAPITULO_CONCLUIDO',
+  'VISUALIZAR_PROGRESSO_CAPITULO','MARCAR_CAPITULO_CONCLUIDO','PLANEJAR_LIVRO',
   'VISUALIZAR_ARQUIVO_TURMA','CRIAR_PASTA_ARQUIVO_TURMA','EDITAR_PASTA_ARQUIVO_TURMA',
   'INATIVAR_PASTA_ARQUIVO_TURMA','UPLOAD_ARQUIVO_TURMA','EDITAR_ARQUIVO_TURMA','INATIVAR_ARQUIVO_TURMA',
   'VISUALIZAR_CALENDARIO','GERENCIAR_CALENDARIO','EDITAR_EVENTO_CALENDARIO','EXCLUIR_EVENTO_CALENDARIO',
@@ -1363,6 +1437,7 @@ INSERT IGNORE INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`) VAL
   ('20260514000000_ContratosModule',                       '10.0.0'),
   ('20260516120000_ContratosAlignColumns',                 '10.0.0'),
   ('20260521120000_PreAlunoDocumentosModule',              '10.0.0'),
-  ('20260521140000_PreResponsaveisModule',                 '10.0.0');
+  ('20260521140000_PreResponsaveisModule',                 '10.0.0'),
+  ('20260622120000_MetricaAulaPlanejamentoModule',         '10.0.0');
 
 -- FIM DO SETUP

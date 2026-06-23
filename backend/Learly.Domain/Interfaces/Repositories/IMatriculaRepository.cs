@@ -7,6 +7,10 @@ public interface IMatriculaRepository : IRepository<Matricula, int>
 {
     Task<Matricula?> ObterPorIdEEscolaAsync(int matriculaId, int escolaId, CancellationToken cancellationToken = default);
     Task<Matricula?> ObterRastreadaPorIdEEscolaAsync(int matriculaId, int escolaId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Matricula>> ListarRastreadasPorIdsEEscolaAsync(
+        int escolaId,
+        IEnumerable<int> matriculaIds,
+        CancellationToken cancellationToken = default);
 
     Task<bool> ExisteAlunoNaEscolaAsync(int alunoId, int escolaId, CancellationToken cancellationToken = default);
 
@@ -41,5 +45,6 @@ public interface IMatriculaRepository : IRepository<Matricula, int>
         string? status,
         int? alunoId,
         int? turmaId,
+        IReadOnlyList<string>? statusesIn = null,
         CancellationToken cancellationToken = default);
 }

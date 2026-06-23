@@ -15,4 +15,6 @@ public interface IEscolaRepository : IRepository<Escola, int>
     Task<bool> ExisteComCodigoAsync(string codigoEscola, CancellationToken cancellationToken = default);
 
     Task<int?> ObterIdAtivaPorCodigoEscolaAsync(string codigoEscola, CancellationToken cancellationToken = default);
+
+    Task<Escola?> ObterRastreadaPorIdAsync(int id, CancellationToken cancellationToken = default);
 }

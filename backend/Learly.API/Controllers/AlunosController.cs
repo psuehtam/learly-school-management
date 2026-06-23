@@ -43,15 +43,6 @@ public sealed class AlunosController : ControllerBase
         return resultado.ToActionResult(this);
     }
 
-    [HttpPost]
-    [RequirePermission("CRIAR_ALUNO")]
-    public async Task<IActionResult> Criar([FromBody] CriarAlunoRequest body, CancellationToken cancellationToken)
-    {
-        var uc = AppUserContextMapper.From(HttpContext.GetUserContext());
-        var resultado = await _alunosService.CriarAlunoAsync(body, uc, cancellationToken);
-        return resultado.ToActionResult(this);
-    }
-
     [HttpGet("{alunoId:int}/ocorrencias")]
     [RequirePermission("VISUALIZAR_OCORRENCIA")]
     public async Task<IActionResult> ListarOcorrencias(int alunoId, CancellationToken cancellationToken)

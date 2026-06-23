@@ -195,6 +195,8 @@ public sealed class ContratosService : IContratosService
             template = await _templates.ObterPorIdEEscolaAsync(request.TemplateId.Value, escolaId.Value, cancellationToken);
             if (template is null)
                 return new ContratoGeradoOperacaoResultado(false, "Template de contrato não encontrado.", 404);
+            if (!template.Ativo)
+                return new ContratoGeradoOperacaoResultado(false, "Template de contrato está inativo.", 422);
         }
         else
         {

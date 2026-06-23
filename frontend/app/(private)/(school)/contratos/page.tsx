@@ -66,7 +66,7 @@ function EditorToolbar({ editor, variaveis }: EditorToolbarProps) {
         type="button"
         onMouseDown={(e) => { e.preventDefault(); onClick(); }}
         title={title}
-        className={`rounded px-2 py-1 text-sm transition ${active ? "bg-[#4a6d8c] text-white" : "hover:bg-zinc-100 text-zinc-600"}`}
+        className={`rounded px-2 py-1 text-sm transition ${active ? "bg-[#4a6d8c] text-white" : "hover:bg-zinc-100 text-zinc-800"}`}
       >
         {children}
       </button>
@@ -133,7 +133,7 @@ function EditorToolbar({ editor, variaveis }: EditorToolbarProps) {
                 className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-zinc-50"
               >
                 <span className="font-mono text-xs font-semibold text-[#4a6d8c]">{v.variavel}</span>
-                <span className="text-xs text-zinc-500">{v.descricao}</span>
+                <span className="text-xs text-zinc-700">{v.descricao}</span>
               </button>
             ))}
           </div>
@@ -235,10 +235,10 @@ function ModalTemplate({ open, onClose, template, variaveis, onSaved }: ModalTem
             <EditorToolbar editor={editor} variaveis={variaveis} />
             <EditorContent
               editor={editor}
-              className="prose prose-sm min-h-[320px] max-w-none p-4 text-zinc-900 focus-within:outline-none [&_.ProseMirror]:min-h-[300px] [&_.ProseMirror]:outline-none"
+              className="prose prose-sm min-h-[320px] max-w-none p-4 text-zinc-900 focus-within:outline-none [&_.ProseMirror]:min-h-[300px] [&_.ProseMirror]:caret-zinc-900 [&_.ProseMirror]:text-zinc-900 [&_.ProseMirror]:outline-none"
             />
           </div>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-zinc-600">
             Use o botão "Inserir variável" para adicionar campos dinâmicos como <span className="font-mono">{"{{PreAluno_NomeCompleto}}"}</span>.
           </p>
         </div>
@@ -397,7 +397,7 @@ function ModalGerarContrato({ open, onClose, templates, preAlunos, preAlunoIdIni
           </p>
         </div>
         <div
-          className="prose prose-sm max-w-none rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
+          className="prose prose-sm max-w-none rounded-xl border border-zinc-200 bg-white p-6 shadow-sm text-zinc-900"
           dangerouslySetInnerHTML={{ __html: resultado.conteudoGeradoHtml }}
         />
       </Modal>
@@ -454,9 +454,9 @@ function ModalGerarContrato({ open, onClose, templates, preAlunos, preAlunoIdIni
             className={SELECT}
           >
             <option value="">Usar template ativo{templateAtivo ? ` (${templateAtivo.nome})` : " — nenhum ativo"}</option>
-            {templates.map((t) => (
+            {templates.filter((t) => t.ativo).map((t) => (
               <option key={t.id} value={t.id}>
-                v{t.versao} — {t.nome}{t.ativo ? " ✓" : ""}
+                v{t.versao} — {t.nome}
               </option>
             ))}
           </select>
@@ -629,7 +629,7 @@ export default function ContratosPage() {
                     <td className="px-4 py-3 text-zinc-500">{formatDate(t.dataCriacao)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {canGerar && (
+                        {canGerar && t.ativo && (
                           <button
                             type="button"
                             title="Gerar contrato com este template"

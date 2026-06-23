@@ -13,12 +13,18 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
 {
     private readonly ILivroCatalogoRepository _livros;
     private readonly IEscolaRepository _escolas;
+    private readonly ILivroPlanejamentoService _planejamento;
     private readonly IUnitOfWork _unitOfWork;
 
-    public LivrosEscolaService(ILivroCatalogoRepository livros, IEscolaRepository escolas, IUnitOfWork unitOfWork)
+    public LivrosEscolaService(
+        ILivroCatalogoRepository livros,
+        IEscolaRepository escolas,
+        ILivroPlanejamentoService planejamento,
+        IUnitOfWork unitOfWork)
     {
         _livros = livros;
         _escolas = escolas;
+        _planejamento = planejamento;
         _unitOfWork = unitOfWork;
     }
 
@@ -28,9 +34,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
     {
         var escolaId = await ObterEscolaIdAsync(uc, cancellationToken);
         if (!escolaId.HasValue)
-        {
             return new LivrosEscolaListagemResultado(false, [], "Acesso negado.", LivrosEscolaFalha.AcessoNegado);
-        }
 
         var rows = await _livros.ListarTodosPorEscolaAsync(escolaId.Value, cancellationToken);
         var itens = rows.Select(r => new LivroEscolaResponse(
@@ -38,7 +42,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
             r.Nome,
             r.Status,
             r.QuantidadeCapitulos,
-            r.TotalAulasPrevistas)).ToList();
+            r.TotalDuracaoMinutos)).ToList();
         return new LivrosEscolaListagemResultado(true, itens, null, LivrosEscolaFalha.Nenhuma);
     }
 
@@ -49,24 +53,20 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
     {
         var escolaId = await ObterEscolaIdAsync(uc, cancellationToken);
         if (!escolaId.HasValue)
-        {
             return new LivrosEscolaDetalheResultado(false, null, "Acesso negado.", LivrosEscolaFalha.AcessoNegado);
-        }
 
         var entidade = await _livros.ObterPorIdEscolaComCapitulosAsync(livroId, escolaId.Value, cancellationToken);
         if (entidade is null)
-        {
             return new LivrosEscolaDetalheResultado(false, null, "Livro nao encontrado.", LivrosEscolaFalha.NaoEncontrado);
-        }
 
         var capsOrd = entidade.Capitulos.OrderBy(c => c.Id).ToList();
-        var totalAulas = capsOrd.Sum(c => c.QtdAulasPrevistas);
+        var totalMinutos = capsOrd.Sum(c => c.DuracaoMinutos);
         var dto = new LivroEscolaResponse(
             entidade.Id,
             entidade.Nome,
             entidade.Status,
             capsOrd.Count,
-            totalAulas,
+            totalMinutos,
             MapearCapitulosDto(capsOrd));
         return new LivrosEscolaDetalheResultado(true, dto, null, LivrosEscolaFalha.Nenhuma);
     }
@@ -78,9 +78,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
     {
         var escolaId = await ObterEscolaIdAsync(uc, cancellationToken);
         if (!escolaId.HasValue)
-        {
             return new LivrosEscolaCriacaoResultado(false, null, "Acesso negado.", LivrosEscolaFalha.AcessoNegado);
-        }
 
         var nome = body.Nome?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(nome) || nome.Length > 150)
@@ -92,38 +90,24 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
         }
 
         if (await _livros.ExisteNomeEmEscolaAsync(escolaId.Value, nome, null, cancellationToken))
-        {
             return new LivrosEscolaCriacaoResultado(false, null, "Ja existe um livro com este nome nesta escola.", LivrosEscolaFalha.Conflito);
-        }
 
         const int maxCapitulos = 200;
-        const int maxAulasPrevistasPorCapitulo = 500;
-        var qtdCapitulos = body.QuantidadeCapitulos;
-        var aulasLista = body.AulasPrevistasPorCapitulo;
-        if (qtdCapitulos < 1 || qtdCapitulos > maxCapitulos)
+        if (body.Capitulos is null || body.Capitulos.Count < 1 || body.Capitulos.Count > maxCapitulos)
         {
             return new LivrosEscolaCriacaoResultado(
                 false, null,
-                $"Quantidade de capitulos deve ser entre 1 e {maxCapitulos}.",
+                $"O livro deve ter entre 1 e {maxCapitulos} capitulos.",
                 LivrosEscolaFalha.Validacao);
         }
 
-        if (aulasLista is null || aulasLista.Count != qtdCapitulos)
+        for (var idx = 0; idx < body.Capitulos.Count; idx++)
         {
-            return new LivrosEscolaCriacaoResultado(
-                false, null,
-                "Informe a quantidade de aulas previstas para cada capitulo (lista com o mesmo tamanho da quantidade de capitulos).",
-                LivrosEscolaFalha.Validacao);
-        }
-
-        for (var idx = 0; idx < aulasLista.Count; idx++)
-        {
-            var v = aulasLista[idx];
-            if (v < 1 || v > maxAulasPrevistasPorCapitulo)
+            if (body.Capitulos[idx].DuracaoMinutos < 1)
             {
                 return new LivrosEscolaCriacaoResultado(
                     false, null,
-                    $"Capitulo {idx + 1}: aulas previstas devem ser entre 1 e {maxAulasPrevistasPorCapitulo}.",
+                    $"Capitulo {idx + 1}: duracao deve ser de pelo menos 1 minuto.",
                     LivrosEscolaFalha.Validacao);
             }
         }
@@ -141,13 +125,18 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
                 DataAtualizacao = agora
             };
 
-            for (var i = 1; i <= qtdCapitulos; i++)
+            for (var i = 0; i < body.Capitulos.Count; i++)
             {
+                var item = body.Capitulos[i];
+                var nomeCap = string.IsNullOrWhiteSpace(item.Nome?.Trim())
+                    ? $"Capítulo {i + 1}"
+                    : item.Nome!.Trim();
+
                 entidade.Capitulos.Add(new Capitulo
                 {
                     EscolaId = escolaId.Value,
-                    Nome = $"Capítulo {i}",
-                    QtdAulasPrevistas = aulasLista[i - 1],
+                    Nome = nomeCap,
+                    DuracaoMinutos = item.DuracaoMinutos,
                     Status = "Ativo",
                     DataCriacao = agora,
                     DataAtualizacao = agora
@@ -162,16 +151,15 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
         _livros.Adicionar(entidade);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var totalAulas = 0;
-        for (var i = 0; i < aulasLista.Count; i++)
-            totalAulas += aulasLista[i];
+        await _planejamento.GerarRascunhoAsync(entidade.Id, escolaId.Value, cancellationToken);
 
+        var totalMinutos = body.Capitulos.Sum(c => c.DuracaoMinutos);
         var dto = new LivroEscolaResponse(
             entidade.Id,
             entidade.Nome,
             entidade.Status,
-            qtdCapitulos,
-            totalAulas);
+            body.Capitulos.Count,
+            totalMinutos);
         return new LivrosEscolaCriacaoResultado(true, dto, null, LivrosEscolaFalha.Nenhuma);
     }
 
@@ -183,9 +171,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
     {
         var escolaId = await ObterEscolaIdAsync(uc, cancellationToken);
         if (!escolaId.HasValue)
-        {
             return new LivrosEscolaAtualizacaoResultado(false, null, "Acesso negado.", LivrosEscolaFalha.AcessoNegado);
-        }
 
         var temNome = body.Nome is not null;
         var temStatus = body.Status is not null;
@@ -219,14 +205,11 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
             ? await _livros.ObterRastreadoPorIdEscolaComCapitulosAsync(livroId, escolaId.Value, cancellationToken)
             : await _livros.ObterRastreadoPorIdEscolaAsync(livroId, escolaId.Value, cancellationToken);
         if (entidade is null)
-        {
             return new LivrosEscolaAtualizacaoResultado(false, null, "Livro nao encontrado.", LivrosEscolaFalha.NaoEncontrado);
-        }
 
-        string? novoNome = null;
         if (body.Nome is not null)
         {
-            novoNome = body.Nome.Trim();
+            var novoNome = body.Nome.Trim();
             if (string.IsNullOrWhiteSpace(novoNome) || novoNome.Length > 150)
             {
                 return new LivrosEscolaAtualizacaoResultado(
@@ -244,10 +227,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
                     LivrosEscolaFalha.Conflito);
             }
 
-            try
-            {
-                entidade.Nome = novoNome;
-            }
+            try { entidade.Nome = novoNome; }
             catch (DomainException ex)
             {
                 return new LivrosEscolaAtualizacaoResultado(false, null, ex.Message, LivrosEscolaFalha.Validacao);
@@ -256,10 +236,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
 
         if (novoStatus is not null)
         {
-            try
-            {
-                entidade.Status = novoStatus;
-            }
+            try { entidade.Status = novoStatus; }
             catch (DomainException ex)
             {
                 return new LivrosEscolaAtualizacaoResultado(false, null, ex.Message, LivrosEscolaFalha.Validacao);
@@ -268,7 +245,6 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
 
         if (temCapitulosAulas)
         {
-            const int maxAulasPrevistasPorCapitulo = 500;
             var capsOrd = entidade.Capitulos.OrderBy(c => c.Id).ToList();
             if (body.CapitulosAulas!.Count != capsOrd.Count)
             {
@@ -283,15 +259,15 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
             var mapPorId = new Dictionary<int, int>();
             foreach (var item in body.CapitulosAulas)
             {
-                if (item.QtdAulasPrevistas < 1 || item.QtdAulasPrevistas > maxAulasPrevistasPorCapitulo)
+                if (item.DuracaoMinutos < 1)
                 {
                     return new LivrosEscolaAtualizacaoResultado(
                         false, null,
-                        $"Aulas previstas por capitulo devem ser entre 1 e {maxAulasPrevistasPorCapitulo}.",
+                        "Duracao do capitulo deve ser de pelo menos 1 minuto.",
                         LivrosEscolaFalha.Validacao);
                 }
 
-                if (!mapPorId.TryAdd(item.CapituloId, item.QtdAulasPrevistas))
+                if (!mapPorId.TryAdd(item.CapituloId, item.DuracaoMinutos))
                 {
                     return new LivrosEscolaAtualizacaoResultado(
                         false, null,
@@ -316,7 +292,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
             {
                 try
                 {
-                    c.QtdAulasPrevistas = mapPorId[c.Id];
+                    c.DuracaoMinutos = mapPorId[c.Id];
                     c.DataAtualizacao = agoraCap;
                 }
                 catch (DomainException ex)
@@ -329,7 +305,6 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
         if (temCapitulosNovos)
         {
             const int maxCapitulosLivro = 200;
-            const int maxAulasPrevistasPorCapitulo = 500;
             var atualCount = entidade.Capitulos.Count;
             if (atualCount + body.CapitulosNovos!.Count > maxCapitulosLivro)
             {
@@ -342,18 +317,18 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
             var agoraNovo = DateTime.UtcNow;
             foreach (var item in body.CapitulosNovos)
             {
-                if (item.QtdAulasPrevistas < 1 || item.QtdAulasPrevistas > maxAulasPrevistasPorCapitulo)
+                if (item.DuracaoMinutos < 1)
                 {
                     return new LivrosEscolaAtualizacaoResultado(
                         false, null,
-                        $"Cada capitulo novo deve ter entre 1 e {maxAulasPrevistasPorCapitulo} aulas previstas.",
+                        "Cada capitulo novo deve ter duracao de pelo menos 1 minuto.",
                         LivrosEscolaFalha.Validacao);
                 }
 
                 var ordemNome = entidade.Capitulos.Count + 1;
                 var nomeCap = string.IsNullOrWhiteSpace(item.Nome?.Trim())
                     ? $"Capítulo {ordemNome}"
-                    : item.Nome.Trim();
+                    : item.Nome!.Trim();
 
                 try
                 {
@@ -362,7 +337,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
                         EscolaId = escolaId.Value,
                         LivroId = entidade.Id,
                         Nome = nomeCap,
-                        QtdAulasPrevistas = item.QtdAulasPrevistas,
+                        DuracaoMinutos = item.DuracaoMinutos,
                         Status = "Ativo",
                         DataCriacao = agoraNovo,
                         DataAtualizacao = agoraNovo
@@ -378,6 +353,9 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
         entidade.DataAtualizacao = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        if (temCapitulosAulas || temCapitulosNovos)
+            await _planejamento.GerarRascunhoAsync(livroId, escolaId.Value, cancellationToken);
+
         var totais = await _livros.ObterTotaisCapitulosPorLivroAsync(livroId, escolaId.Value, cancellationToken);
         IReadOnlyList<LivroCapituloItemResponse>? capDtos = null;
         if (temCapitulosAulas || temCapitulosNovos)
@@ -388,7 +366,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
             entidade.Nome,
             entidade.Status,
             totais.QuantidadeCapitulos,
-            totais.TotalAulasPrevistas,
+            totais.TotalDuracaoMinutos,
             capDtos);
         return new LivrosEscolaAtualizacaoResultado(true, dto, null, LivrosEscolaFalha.Nenhuma);
     }
@@ -396,7 +374,7 @@ public sealed class LivrosEscolaService : ILivrosEscolaService
     private static IReadOnlyList<LivroCapituloItemResponse> MapearCapitulosDto(IEnumerable<Capitulo> capitulos) =>
         capitulos
             .OrderBy(c => c.Id)
-            .Select(c => new LivroCapituloItemResponse(c.Id, c.Nome, c.QtdAulasPrevistas, c.Status))
+            .Select(c => new LivroCapituloItemResponse(c.Id, c.Nome, c.DuracaoMinutos, c.Status))
             .ToList();
 
     private async Task<int?> ObterEscolaIdAsync(AppUserContext uc, CancellationToken cancellationToken)
